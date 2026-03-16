@@ -1,0 +1,177 @@
+from datetime import date, timedelta
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from backend.database import get_db
+from backend.models.user import User, UserRole
+from backend.models.product import Product
+from backend.models.inventory import Inventory
+from backend.models.inbound import Inbound
+from backend.schemas.inventory import (
+    ProductCreate, ProductResponse,
+    InboundCreate, InboundResponse,
+    InventoryResponse,
+)
+from backend.core.dependencies import require_role
+
+router = APIRouter()
+
+
+def _to_inv_response(inv: Inventory) -> InventoryResponse:
+    return InventoryResponse(
+        id=inv.id,
+        product_id=inv.product_id,
+        product_name=inv.product.name,
+        sku=inv.product.sku,
+        storage_type=inv.product.storage_type,
+        lot_number=inv.lot_number,
+        expiry_date=inv.expiry_date,
+        quantity=inv.quantity,
+        location=inv.location,
+        inbound_date=inv.inbound_date,
+        days_until_expiry=(inv.expiry_date - date.today()).days,
+    )
+
+
+# ── Inventory endpoints ────────────────────────────────────────────────────────
+
+@router.get("/inventory/", response_model=List[InventoryResponse])
+def list_inventory(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.WORKER])),
+):
+    rows = (
+        db.query(Inventory)
+        .join(Product)
+        .order_by(Inventory.expiry_date.asc())
+        .all()
+    )
+    return [_to_inv_response(inv) for inv in rows]
+
+
+@router.get("/inventory/seller", response_model=List[InventoryResponse])
+def list_inventory_seller(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.SELLER])),
+):
+    rows = (
+        db.query(Inventory)
+        .join(Product)
+        .filter(Product.seller_id == current_user.id)
+        .order_by(Inventory.expiry_date.asc())
+        .all()
+    )
+    return [_to_inv_response(inv) for inv in rows]
+
+
+@router.get("/inventory/alerts", response_model=List[InventoryResponse])
+def list_expiry_alerts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.ADMIN])),
+):
+    threshold = date.today() + timedelta(days=30)
+    rows = (
+        db.query(Inventory)
+        .join(Product)
+        .filter(Inventory.expiry_date <= threshold)
+        .order_by(Inventory.expiry_date.asc())
+        .all()
+    )
+    return [_to_inv_response(inv) for inv in rows]
+
+
+@router.post("/inventory/inbound", response_model=InboundResponse)
+def register_inbound(
+    data: InboundCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.WORKER])),
+):
+    product = db.query(Product).filter(Product.id == data.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
+
+    # Create inbound record
+    inbound = Inbound(
+        product_id=data.product_id,
+        lot_number=data.lot_number,
+        expiry_date=data.expiry_date,
+        quantity=data.quantity,
+        inbound_date=date.today(),
+        note=data.note,
+        created_by=current_user.id,
+    )
+    db.add(inbound)
+
+    # Upsert inventory LOT row
+    inv = (
+        db.query(Inventory)
+        .filter(
+            Inventory.product_id == data.product_id,
+            Inventory.lot_number == data.lot_number,
+        )
+        .first()
+    )
+    if inv:
+        inv.quantity += data.quantity
+    else:
+        inv = Inventory(
+            product_id=data.product_id,
+            lot_number=data.lot_number,
+            expiry_date=data.expiry_date,
+            quantity=data.quantity,
+            inbound_date=date.today(),
+        )
+        db.add(inv)
+
+    db.commit()
+    db.refresh(inbound)
+
+    return InboundResponse(
+        id=inbound.id,
+        product_id=inbound.product_id,
+        product_name=product.name,
+        lot_number=inbound.lot_number,
+        expiry_date=inbound.expiry_date,
+        quantity=inbound.quantity,
+        inbound_date=inbound.inbound_date,
+        note=inbound.note,
+        created_by=inbound.created_by,
+        created_at=inbound.created_at,
+    )
+
+
+# ── Product endpoints ──────────────────────────────────────────────────────────
+
+@router.get("/products/", response_model=List[ProductResponse])
+def list_products(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.WORKER])),
+):
+    return db.query(Product).filter(Product.is_active == True).all()
+
+
+@router.get("/products/seller", response_model=List[ProductResponse])
+def list_products_seller(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.SELLER])),
+):
+    return (
+        db.query(Product)
+        .filter(Product.seller_id == current_user.id, Product.is_active == True)
+        .all()
+    )
+
+
+@router.post("/products/", response_model=ProductResponse)
+def create_product(
+    data: ProductCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.ADMIN])),
+):
+    if db.query(Product).filter(Product.sku == data.sku).first():
+        raise HTTPException(status_code=400, detail="이미 존재하는 SKU입니다.")
+    product = Product(**data.model_dump())
+    db.add(product)
+    db.commit()
+    db.refresh(product)
+    return product
