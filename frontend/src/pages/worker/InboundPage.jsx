@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
+import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
 
 const EMPTY_FORM = { product_id: '', lot_number: '', expiry_date: '', quantity: '', note: '' }
@@ -8,11 +9,12 @@ const EMPTY_FORM = { product_id: '', lot_number: '', expiry_date: '', quantity: 
 export default function InboundPage() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
+  const addToast = useToastStore((s) => s.addToast)
 
   const [products, setProducts] = useState([])
   const [inventory, setInventory] = useState([])
   const [form, setForm] = useState(EMPTY_FORM)
-  const [status, setStatus] = useState(null) // { type: 'success'|'error', msg: string }
+  const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   const fetchData = async () => {
@@ -37,9 +39,9 @@ export default function InboundPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    setStatus(null)
+    setFormError('')
     if (!form.product_id || !form.lot_number || !form.expiry_date || !form.quantity) {
-      setStatus({ type: 'error', msg: '필수 항목을 모두 입력하세요.' })
+      setFormError('필수 항목을 모두 입력하세요.')
       return
     }
     setSubmitting(true)
@@ -52,10 +54,12 @@ export default function InboundPage() {
         note: form.note || null,
       })
       setForm(EMPTY_FORM)
-      setStatus({ type: 'success', msg: '입고 등록이 완료되었습니다.' })
+      addToast('success', '입고 등록이 완료되었습니다.')
       await fetchData()
     } catch (err) {
-      setStatus({ type: 'error', msg: err.response?.data?.detail || '입고 등록 실패' })
+      const msg = err.response?.data?.detail || '입고 등록 실패'
+      setFormError(msg)
+      addToast('error', msg)
     } finally {
       setSubmitting(false)
     }
@@ -69,7 +73,7 @@ export default function InboundPage() {
           <span className="text-xl font-bold">입고 등록</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-green-100">{user?.email}</span>
+          <span className="hidden sm:inline text-sm text-green-100">{user?.email}</span>
           <button onClick={handleLogout} className="bg-green-900 hover:bg-green-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">로그아웃</button>
         </div>
       </nav>
@@ -79,13 +83,9 @@ export default function InboundPage() {
         <div className="bg-white rounded-xl shadow-sm border border-green-100 p-7 mb-8">
           <h3 className="text-base font-semibold text-gray-800 mb-5">입고 정보 입력</h3>
 
-          {status && (
-            <div className={`mb-5 rounded-xl px-4 py-3 text-sm font-medium border ${
-              status.type === 'success'
-                ? 'bg-green-50 border-green-300 text-green-700'
-                : 'bg-red-50 border-red-200 text-red-600'
-            }`}>
-              {status.type === 'success' ? '✅' : '⚠️'} {status.msg}
+          {formError && (
+            <div className="mb-5 rounded-xl px-4 py-3 text-sm font-medium border bg-red-50 border-red-200 text-red-600">
+              ⚠️ {formError}
             </div>
           )}
 
@@ -138,7 +138,7 @@ export default function InboundPage() {
         </div>
 
         {/* Recent inbound history */}
-        <div className="bg-white rounded-xl shadow-sm border border-green-100 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-green-100 overflow-x-auto">
           <div className="px-6 py-4 border-b border-gray-100">
             <h3 className="text-base font-semibold text-gray-800">최근 입고 이력 (최대 10건)</h3>
           </div>

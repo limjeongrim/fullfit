@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
+import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
 
 function ExpiryBadge({ days }) {
@@ -38,16 +39,15 @@ const STORAGE_LABEL = { ROOM_TEMP: '상온', COLD: '냉장' }
 export default function InventoryPage() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
+  const addToast = useToastStore((s) => s.addToast)
 
   const [inventory, setInventory] = useState([])
   const [products, setProducts] = useState([])
-  const [filter, setFilter] = useState('all') // all | expiring | cold
+  const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [alertCount, setAlertCount] = useState(0)
   const [showModal, setShowModal] = useState(false)
-  const [toast, setToast] = useState('')
 
-  // Inbound form state
   const [form, setForm] = useState({
     product_id: '',
     lot_number: '',
@@ -121,10 +121,10 @@ export default function InventoryPage() {
       setShowModal(false)
       setForm({ product_id: '', lot_number: '', expiry_date: '', quantity: '', note: '' })
       await fetchInventory()
-      setToast('입고 등록이 완료되었습니다.')
-      setTimeout(() => setToast(''), 3000)
+      addToast('success', '입고 등록이 완료되었습니다.')
     } catch (err) {
       setFormError(err.response?.data?.detail || '입고 등록에 실패했습니다.')
+      addToast('error', err.response?.data?.detail || '입고 등록에 실패했습니다.')
     } finally {
       setSubmitting(false)
     }
@@ -141,7 +141,7 @@ export default function InventoryPage() {
           <span className="text-xl font-bold">재고 관리</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-blue-100">{user?.email}</span>
+          <span className="hidden sm:inline text-sm text-blue-100">{user?.email}</span>
           <button
             onClick={handleLogout}
             className="bg-blue-900 hover:bg-blue-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors"
@@ -162,16 +162,9 @@ export default function InventoryPage() {
           </div>
         )}
 
-        {/* Toast */}
-        {toast && (
-          <div className="mb-4 bg-green-50 border border-green-300 text-green-700 rounded-xl px-5 py-3 font-medium">
-            ✅ {toast}
-          </div>
-        )}
-
         {/* Controls */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {[
               { key: 'all', label: '전체' },
               { key: 'expiring', label: '만료임박' },
@@ -206,13 +199,13 @@ export default function InventoryPage() {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-blue-100">
+        <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-blue-100">
           <table className="w-full text-sm">
             <thead className="bg-blue-700 text-white">
               <tr>
                 {['상품명', 'SKU', 'LOT번호', '유통기한', '남은일수', '수량', '보관방식', '상태'].map(
                   (h) => (
-                    <th key={h} className="px-4 py-3 text-left font-medium">
+                    <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">
                       {h}
                     </th>
                   )
@@ -344,10 +337,7 @@ export default function InventoryPage() {
               <div className="flex gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowModal(false)
-                    setFormError('')
-                  }}
+                  onClick={() => { setShowModal(false); setFormError('') }}
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
                 >
                   취소

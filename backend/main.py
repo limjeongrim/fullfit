@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,8 +11,10 @@ from backend.models.order import Order, OrderChannel, OrderStatus  # noqa: F401
 from backend.models.order_item import OrderItem            # noqa: F401
 from backend.models.delivery import Delivery, Carrier, DeliveryStatus  # noqa: F401
 from backend.models.settlement import Settlement, SettlementStatus      # noqa: F401
+from backend.models.return_request import ReturnRequest, ReturnReason, ReturnStatus  # noqa: F401
 from backend.core.security import hash_password
 from backend.routers import auth, inventory, order, delivery, settlement, stats
+from backend.routers import return_request
 
 app = FastAPI(title="FullFit API", version="1.0.0")
 
@@ -30,6 +32,7 @@ app.include_router(order.router, tags=["Orders"])
 app.include_router(delivery.router, tags=["Deliveries"])
 app.include_router(settlement.router, tags=["Settlements"])
 app.include_router(stats.router, tags=["Stats"])
+app.include_router(return_request.router, tags=["Returns"])
 
 
 # ── Seed helpers ───────────────────────────────────────────────────────────────
@@ -107,6 +110,19 @@ def seed_orders(db):
         (OrderChannel.MANUAL,     OrderStatus.CANCELLED, "강하늘", "010-0123-4567", "울산 남구 삼산로 15",        Decimal("25000"), p1, 1, Decimal("25000")),
     ]
 
+    now = datetime.utcnow()
+    created_at_map = {
+        1: now - timedelta(days=6),
+        2: now - timedelta(days=6),
+        3: now - timedelta(days=4),
+        4: now - timedelta(days=4),
+        5: now - timedelta(days=3),
+        6: now - timedelta(days=3),
+        7: now - timedelta(days=2),
+        8: now - timedelta(days=2),
+        9: now,
+        10: now,
+    }
     today = datetime.now().strftime("%Y%m%d")
     for seq, (channel, status, rname, rphone, raddr, amount, prod, qty, uprice) in enumerate(seed_data, start=1):
         order_number = f"FF-{today}-{seq:04d}"
@@ -119,6 +135,7 @@ def seed_orders(db):
             receiver_phone=rphone,
             receiver_address=raddr,
             total_amount=amount,
+            created_at=created_at_map[seq],
         )
         db.add(o)
         db.flush()
@@ -180,6 +197,41 @@ def seed_settlements(db):
     print("✅ Seed settlement created.")
 
 
+def seed_returns(db):
+    if db.query(ReturnRequest).count() > 0:
+        return
+    seller = db.query(User).filter(User.email == "seller@fullfit.com").first()
+    if not seller:
+        return
+    delivered = (
+        db.query(Order)
+        .filter(Order.seller_id == seller.id, Order.status == OrderStatus.DELIVERED)
+        .all()
+    )
+    if len(delivered) < 2:
+        return
+    returns = [
+        ReturnRequest(
+            order_id=delivered[0].id,
+            seller_id=seller.id,
+            reason=ReturnReason.DEFECTIVE,
+            status=ReturnStatus.IN_REVIEW,
+            note="제품 불량으로 인한 반품 요청입니다.",
+            inspection_note="검수 진행 중",
+        ),
+        ReturnRequest(
+            order_id=delivered[1].id,
+            seller_id=seller.id,
+            reason=ReturnReason.CHANGE_OF_MIND,
+            status=ReturnStatus.REQUESTED,
+            note="단순 변심으로 반품합니다.",
+        ),
+    ]
+    db.add_all(returns)
+    db.commit()
+    print("✅ Seed returns created.")
+
+
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
@@ -190,6 +242,7 @@ def startup():
         seed_orders(db)
         seed_deliveries(db)
         seed_settlements(db)
+        seed_returns(db)
     finally:
         db.close()
 

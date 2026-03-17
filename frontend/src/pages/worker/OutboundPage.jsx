@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
+import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
 
 const CHANNEL_LABELS = {
@@ -11,9 +12,9 @@ const CHANNEL_LABELS = {
 export default function OutboundPage() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
+  const addToast = useToastStore((s) => s.addToast)
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
-  const [toast, setToast] = useState('')
 
   const fetchOrders = async () => {
     setLoading(true)
@@ -32,15 +33,13 @@ export default function OutboundPage() {
 
   const handleLogout = () => { logout(); navigate('/login') }
 
-  const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000) }
-
   const handleOutbound = async (orderId) => {
     try {
       await api.patch(`/orders/${orderId}/status`, { status: 'SHIPPED' })
       await fetchOrders()
-      showToast('출고 처리 완료')
+      addToast('success', '출고 처리 완료')
     } catch (err) {
-      showToast(err.response?.data?.detail || '처리 실패')
+      addToast('error', err.response?.data?.detail || '처리 실패')
     }
   }
 
@@ -52,18 +51,12 @@ export default function OutboundPage() {
           <span className="text-xl font-bold">출고 완료 처리</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-green-100">{user?.email}</span>
+          <span className="hidden sm:inline text-sm text-green-100">{user?.email}</span>
           <button onClick={handleLogout} className="bg-green-900 hover:bg-green-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">로그아웃</button>
         </div>
       </nav>
 
       <div className="max-w-6xl mx-auto px-6 py-8">
-        {toast && (
-          <div className="mb-4 bg-green-50 border border-green-300 text-green-700 rounded-xl px-5 py-3 font-medium">
-            ✅ {toast}
-          </div>
-        )}
-
         {/* Info banner */}
         <div className="mb-5 flex items-start gap-3 bg-blue-50 border border-blue-200 text-blue-700 rounded-xl px-5 py-3 text-sm">
           <span className="mt-0.5">ℹ️</span>

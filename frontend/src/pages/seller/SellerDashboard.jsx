@@ -11,6 +11,7 @@ const NAV_CARDS = [
   { title: '재고 조회', icon: '📊', path: '/seller/inventory',   desc: '현재 창고 보관 재고 확인' },
   { title: '배송 추적', icon: '🔍', path: '/seller/deliveries',  desc: '출고된 상품 배송 현황' },
   { title: '정산 내역', icon: '📑', path: '/seller/settlements', desc: '월별 수수료 및 정산 내역' },
+  { title: '반품 신청', icon: '↩️', path: '/seller/returns',     desc: '반품 요청 및 처리 현황' },
 ]
 
 function StatCard({ label, value, color, icon }) {
@@ -50,7 +51,7 @@ export default function SellerDashboard() {
       <nav className="bg-purple-700 text-white px-6 py-4 flex justify-between items-center shadow">
         <span className="text-xl font-bold">FullFit 셀러</span>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-purple-100">{user?.email}</span>
+          <span className="hidden sm:inline text-sm text-purple-100">{user?.email}</span>
           <button onClick={handleLogout}
             className="bg-purple-900 hover:bg-purple-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">
             로그아웃
@@ -66,7 +67,7 @@ export default function SellerDashboard() {
         </div>
 
         {/* Stats cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-7">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
           <StatCard label="오늘 주문"      value={stats?.today_orders}       color="purple" icon="📋" />
           <StatCard label="전체 주문"      value={stats?.total_orders}       color="blue"   icon="📦" />
           <StatCard label="재고 부족"      value={stats?.low_stock_count}    color="red"    icon="⚠️" />
@@ -92,7 +93,7 @@ export default function SellerDashboard() {
         </div>
 
         {/* Quick navigation */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {NAV_CARDS.map((card) => (
             <div key={card.title} onClick={() => navigate(card.path)}
               className="bg-white rounded-xl shadow-sm border border-purple-100 p-5 hover:shadow-md hover:border-purple-300 transition-all cursor-pointer">

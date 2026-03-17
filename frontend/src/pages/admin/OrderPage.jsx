@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
+import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
 
 // ── Static maps ───────────────────────────────────────────────────────────────
@@ -70,6 +71,7 @@ function StatCard({ label, value, color }) {
 export default function AdminOrderPage() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
+  const addToast = useToastStore((s) => s.addToast)
   const fileRef = useRef()
 
   const [orders, setOrders] = useState([])
@@ -77,7 +79,6 @@ export default function AdminOrderPage() {
   const [filterStatus, setFilterStatus] = useState('')
   const [filterChannel, setFilterChannel] = useState('')
   const [search, setSearch] = useState('')
-  const [toast, setToast] = useState({ msg: '', type: 'success' })
   const [showModal, setShowModal] = useState(false)
 
   // Form state
@@ -88,10 +89,7 @@ export default function AdminOrderPage() {
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  const showToast = (msg, type = 'success') => {
-    setToast({ msg, type })
-    setTimeout(() => setToast({ msg: '', type: 'success' }), 3000)
-  }
+  const showToast = (msg, type = 'success') => addToast(type, msg)
 
   const fetchOrders = async () => {
     const params = new URLSearchParams()
@@ -185,23 +183,12 @@ export default function AdminOrderPage() {
           <span className="text-xl font-bold">주문 관리</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-blue-100">{user?.email}</span>
+          <span className="hidden sm:inline text-sm text-blue-100">{user?.email}</span>
           <button onClick={handleLogout} className="bg-blue-900 hover:bg-blue-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">로그아웃</button>
         </div>
       </nav>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Toast */}
-        {toast.msg && (
-          <div className={`mb-4 rounded-xl px-5 py-3 font-medium border ${
-            toast.type === 'error'
-              ? 'bg-red-50 border-red-300 text-red-700'
-              : 'bg-green-50 border-green-300 text-green-700'
-          }`}>
-            {toast.type === 'error' ? '⚠️' : '✅'} {toast.msg}
-          </div>
-        )}
-
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-7">
           {stats.map((s) => <StatCard key={s.label} {...s} />)}

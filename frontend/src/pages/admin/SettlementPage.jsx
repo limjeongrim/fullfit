@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
+import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
 
 function StatusBadge({ status }) {
@@ -14,19 +15,16 @@ const fmt = (n) => `₩${Number(n).toLocaleString()}`
 export default function AdminSettlementPage() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
+  const addToast = useToastStore((s) => s.addToast)
 
   const [settlements, setSettlements] = useState([])
   const [sellers, setSellers] = useState([])
-  const [toast, setToast] = useState({ msg: '', type: 'success' })
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ seller_id: '', year_month: '' })
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  const showToast = (msg, type = 'success') => {
-    setToast({ msg, type })
-    setTimeout(() => setToast({ msg: '', type: 'success' }), 3000)
-  }
+  const showToast = (msg, type = 'success') => addToast(type, msg)
 
   const fetchSettlements = () =>
     api.get('/settlements/').then((r) => setSettlements(r.data))
@@ -87,20 +85,12 @@ export default function AdminSettlementPage() {
           <span className="text-xl font-bold">정산 관리</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-blue-100">{user?.email}</span>
+          <span className="hidden sm:inline text-sm text-blue-100">{user?.email}</span>
           <button onClick={handleLogout} className="bg-blue-900 hover:bg-blue-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">로그아웃</button>
         </div>
       </nav>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {toast.msg && (
-          <div className={`mb-4 rounded-xl px-5 py-3 font-medium border ${
-            toast.type === 'error' ? 'bg-red-50 border-red-300 text-red-700' : 'bg-green-50 border-green-300 text-green-700'
-          }`}>
-            {toast.type === 'error' ? '⚠️' : '✅'} {toast.msg}
-          </div>
-        )}
-
         <div className="flex justify-end mb-5">
           <button onClick={() => setShowModal(true)}
             className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors">
