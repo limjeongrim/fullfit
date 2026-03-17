@@ -15,9 +15,11 @@ from backend.models.return_request import ReturnRequest, ReturnReason, ReturnSta
 from backend.models.sync_history import SyncHistory                                  # noqa: F401
 from backend.models.promotion import Promotion, PromotionChannel                     # noqa: F401
 from backend.models.notification import Notification, NotificationType               # noqa: F401
+from backend.models.chat_room import ChatRoom, RoomType                              # noqa: F401
+from backend.models.chat_message import ChatMessage                                  # noqa: F401
 from backend.core.security import hash_password
 from backend.routers import auth, inventory, order, delivery, settlement, stats
-from backend.routers import return_request, channel_sync, promotion, notification, seller_management
+from backend.routers import return_request, channel_sync, promotion, notification, seller_management, chat
 
 app = FastAPI(title="FullFit API", version="1.0.0")
 
@@ -40,6 +42,7 @@ app.include_router(channel_sync.router, tags=["ChannelSync"])
 app.include_router(promotion.router, tags=["Promotions"])
 app.include_router(notification.router, tags=["Notifications"])
 app.include_router(seller_management.router, tags=["Sellers"])
+app.include_router(chat.router, tags=["Chat"])
 
 
 # ── Seed helpers ───────────────────────────────────────────────────────────────
@@ -405,6 +408,70 @@ def seed_notifications(db):
     print("✅ Seed notifications created.")
 
 
+def seed_chat(db):
+    if db.query(ChatRoom).count() > 0:
+        return
+    seller = db.query(User).filter(User.email == "seller@fullfit.com").first()
+    admin = db.query(User).filter(User.email == "admin@fullfit.com").first()
+    if not seller or not admin:
+        return
+
+    today = datetime.now().strftime("%Y%m%d")
+    order_number = f"FF-{today}-0001"
+
+    now = datetime.utcnow()
+
+    # Room 1: ORDER type linked to first order
+    room1 = ChatRoom(
+        room_type=RoomType.ORDER,
+        reference_id=order_number,
+        seller_id=seller.id,
+        admin_id=admin.id,
+        last_message_at=now,
+    )
+    db.add(room1)
+    db.flush()
+
+    msgs1 = [
+        ChatMessage(room_id=room1.id, sender_id=seller.id,
+                    message=f"안녕하세요, {order_number} 주문 배송이 언제쯤 출발하나요?",
+                    created_at=now - timedelta(hours=3), is_read=True),
+        ChatMessage(room_id=room1.id, sender_id=admin.id,
+                    message="안녕하세요! 현재 피킹 진행 중이며 내일 출고 예정입니다.",
+                    created_at=now - timedelta(hours=2), is_read=True),
+        ChatMessage(room_id=room1.id, sender_id=seller.id,
+                    message="감사합니다. 확인했습니다!",
+                    created_at=now - timedelta(hours=1), is_read=False),
+    ]
+    db.add_all(msgs1)
+    room1.last_message = msgs1[-1].message
+
+    # Room 2: GENERAL type
+    room2 = ChatRoom(
+        room_type=RoomType.GENERAL,
+        reference_id=None,
+        seller_id=seller.id,
+        admin_id=admin.id,
+        last_message_at=now - timedelta(days=1),
+    )
+    db.add(room2)
+    db.flush()
+
+    msgs2 = [
+        ChatMessage(room_id=room2.id, sender_id=seller.id,
+                    message="인바운드 신청은 어떻게 하면 되나요?",
+                    created_at=now - timedelta(days=1, hours=2), is_read=True),
+        ChatMessage(room_id=room2.id, sender_id=admin.id,
+                    message="재고 관리 메뉴에서 입고 신청 버튼을 클릭하시면 됩니다.",
+                    created_at=now - timedelta(days=1), is_read=True),
+    ]
+    db.add_all(msgs2)
+    room2.last_message = msgs2[-1].message
+
+    db.commit()
+    print("✅ Seed chat rooms created.")
+
+
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
@@ -419,6 +486,7 @@ def startup():
         seed_extra_sellers(db)
         seed_promotions(db)
         seed_notifications(db)
+        seed_chat(db)
     finally:
         db.close()
 

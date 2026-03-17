@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
 import api from '../../api/axiosInstance'
+import DeliveryMap from '../../components/DeliveryMap'
 
 const STATUS_META = {
   READY:            { label: '준비',    cls: 'bg-gray-100 text-gray-600' },
@@ -113,6 +114,7 @@ export default function SellerDeliveryPage() {
   const [filterStatus, setFilterStatus] = useState('')
   const [search, setSearch] = useState('')
   const [trackingModal, setTrackingModal] = useState(null)
+  const [showMap, setShowMap] = useState(false)
 
   useEffect(() => {
     api.get('/deliveries/seller').then((res) => setDeliveries(res.data))
@@ -164,6 +166,16 @@ export default function SellerDeliveryPage() {
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2 mb-5">
+          <button
+            onClick={() => setShowMap((v) => !v)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+              showMap
+                ? 'bg-purple-700 text-white border-purple-700'
+                : 'bg-white text-purple-700 border-purple-300 hover:bg-purple-50'
+            }`}
+          >
+            🗺️ {showMap ? '지도 숨기기' : '지도 보기'}
+          </button>
           <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
             className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-300">
             <option value="">전체 상태</option>
@@ -174,6 +186,13 @@ export default function SellerDeliveryPage() {
             className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-60" />
           <span className="text-xs text-gray-400 ml-2">운송장번호 클릭 시 상세 추적</span>
         </div>
+
+        {/* Map */}
+        {showMap && (
+          <div className="mb-5 rounded-xl overflow-hidden border border-purple-100 shadow-sm" style={{ height: 400 }}>
+            <DeliveryMap deliveries={filtered} height={400} />
+          </div>
+        )}
 
         {/* Table */}
         <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-purple-100">

@@ -6,6 +6,7 @@ import {
 import useAuthStore from '../../store/authStore'
 import api from '../../api/axiosInstance'
 import NotificationBell from '../../components/NotificationBell'
+import ChatWidget from '../../components/ChatWidget'
 
 const NAV_CARDS = [
   { title: '주문 현황',    icon: '🛒', path: '/seller/orders',      desc: '내 주문 접수 및 처리 현황' },
@@ -97,7 +98,7 @@ export default function SellerDashboard() {
         </div>
 
         {/* Quick navigation */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 mb-4">
           {NAV_CARDS.map((card) => (
             <div key={card.title} onClick={() => navigate(card.path)}
               className="bg-white rounded-xl shadow-sm border border-purple-100 p-5 hover:shadow-md hover:border-purple-300 transition-all cursor-pointer">
@@ -109,6 +110,7 @@ export default function SellerDashboard() {
           ))}
         </div>
       </div>
+      <ChatWidget />
     </div>
   )
 }

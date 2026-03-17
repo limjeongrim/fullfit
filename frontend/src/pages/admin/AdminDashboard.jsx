@@ -7,6 +7,7 @@ import {
 import useAuthStore from '../../store/authStore'
 import api from '../../api/axiosInstance'
 import NotificationBell from '../../components/NotificationBell'
+import ChatWidget from '../../components/ChatWidget'
 
 // ── Channel colours for pie chart ─────────────────────────────────────────────
 const CHANNEL_COLORS = {
@@ -25,12 +26,14 @@ const NAV_CARDS = [
   { title: '주문 관리',    icon: '📦', path: '/admin/orders',        desc: '전체 주문 현황 및 처리' },
   { title: '재고 관리',    icon: '🏭', path: '/admin/inventory',     desc: '입출고 및 재고 현황' },
   { title: '배송 관리',    icon: '🚚', path: '/admin/deliveries',    desc: '배송 현황 및 운송장 조회' },
+  { title: '배송 지도',    icon: '🗺️', path: '/admin/delivery-map', desc: '지도에서 배송 현황 확인' },
   { title: '정산 관리',    icon: '💰', path: '/admin/settlements',   desc: '셀러별 정산 내역 관리' },
   { title: '반품 관리',    icon: '↩️', path: '/admin/returns',       desc: '반품 요청 검수 및 처리' },
   { title: '채널 연동',    icon: '🔗', path: '/admin/channel-sync',  desc: '판매채널 CSV 주문 동기화' },
   { title: '프로모션',     icon: '🎯', path: '/admin/promotions',    desc: '프로모션 캘린더 및 수요 알림' },
   { title: '수요 예측',    icon: '📈', path: '/admin/forecast',      desc: '재고 소진 예측 및 재입고 계획' },
   { title: '셀러 관리',    icon: '👥', path: '/admin/sellers',       desc: '셀러 계정 등록 및 현황 조회' },
+  { title: '채팅 관리',    icon: '💬', path: '/admin/chat',          desc: '셀러 문의 채팅 관리', badge: true },
 ]
 
 function StatCard({ label, value, color, icon }) {
@@ -56,10 +59,12 @@ export default function AdminDashboard() {
   const navigate = useNavigate()
   const [stats, setStats] = useState(null)
   const [sellerCount, setSellerCount] = useState(null)
+  const [chatUnread, setChatUnread] = useState(0)
 
   useEffect(() => {
     api.get('/stats/admin').then((r) => setStats(r.data)).catch(console.error)
     api.get('/sellers/').then((r) => setSellerCount(r.data.length)).catch(() => {})
+    api.get('/chat/unread-count').then((r) => setChatUnread(r.data.count)).catch(() => {})
   }, [])
 
   const handleLogout = () => { logout(); navigate('/login') }
@@ -156,15 +161,21 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {NAV_CARDS.map((card) => (
             <div key={card.title} onClick={() => navigate(card.path)}
-              className="bg-white rounded-xl shadow-sm border border-blue-100 p-5 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer">
+              className="relative bg-white rounded-xl shadow-sm border border-blue-100 p-5 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer">
               <div className="text-3xl mb-3">{card.icon}</div>
               <h3 className="text-base font-semibold text-gray-800">{card.title}</h3>
               <p className="text-gray-500 text-xs mt-1">{card.desc}</p>
               <span className="mt-3 inline-block text-blue-600 text-xs font-medium">바로가기 →</span>
+              {card.badge && chatUnread > 0 && (
+                <span className="absolute top-3 right-3 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  {chatUnread}
+                </span>
+              )}
             </div>
           ))}
         </div>
       </div>
+      <ChatWidget />
     </div>
   )
 }

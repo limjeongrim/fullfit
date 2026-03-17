@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
 import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
+import DeliveryMap from '../../components/DeliveryMap'
 
 // ── Static maps ───────────────────────────────────────────────────────────────
 
@@ -82,6 +83,7 @@ export default function AdminDeliveryPage() {
   const [filterSeller, setFilterSeller] = useState('')
   const [sellers, setSellers] = useState([])
   const [search, setSearch] = useState('')
+  const [showMap, setShowMap] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ order_id: '', carrier: 'CJ', tracking_number: '', estimated_delivery: '', note: '' })
   const [formError, setFormError] = useState('')
@@ -204,6 +206,16 @@ export default function AdminDeliveryPage() {
         {/* Controls */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setShowMap((v) => !v)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                showMap
+                  ? 'bg-blue-700 text-white border-blue-700'
+                  : 'bg-white text-blue-700 border-blue-300 hover:bg-blue-50'
+              }`}
+            >
+              🗺️ {showMap ? '지도 숨기기' : '지도 보기'}
+            </button>
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
               className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
               <option value="">전체 상태</option>
@@ -230,6 +242,13 @@ export default function AdminDeliveryPage() {
             + 송장 등록
           </button>
         </div>
+
+        {/* Map */}
+        {showMap && (
+          <div className="mb-5 rounded-xl overflow-hidden border border-blue-100 shadow-sm" style={{ height: 400 }}>
+            <DeliveryMap deliveries={filtered} height={400} />
+          </div>
+        )}
 
         {/* Table */}
         <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-blue-100">
