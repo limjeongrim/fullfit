@@ -18,13 +18,6 @@ const CARRIER_META = {
   ETC:    { label: '기타',       cls: 'bg-gray-100 text-gray-500' },
 }
 
-// CJ tracking URL
-const trackingUrl = (carrier, trackingNumber) => {
-  if (carrier === 'CJ')
-    return `https://trace.cjlogistics.com/web/detail.jsp?slipno=${trackingNumber}`
-  return null
-}
-
 function StatusBadge({ status }) {
   const m = STATUS_META[status] || {}
   return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${m.cls}`}>{m.label}</span>
@@ -44,6 +37,74 @@ function isDelayed(d) {
   )
 }
 
+function TrackingModal({ tracking, onClose }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.get(`/deliveries/tracking/${tracking}`)
+      .then(r => setData(r.data))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false))
+  }, [tracking])
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+        <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-lg text-gray-800">배송 추적</h3>
+            <p className="text-xs text-gray-500 mt-0.5 font-mono">{tracking}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+        </div>
+
+        <div className="px-6 py-5">
+          {loading ? (
+            <div className="text-center text-gray-400 py-8">로딩 중...</div>
+          ) : !data ? (
+            <div className="text-center text-gray-400 py-8">추적 정보를 불러올 수 없습니다.</div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-5 p-3 bg-gray-50 rounded-xl">
+                <div>
+                  <p className="text-xs text-gray-500">택배사</p>
+                  <p className="font-semibold text-gray-800">{CARRIER_META[data.carrier]?.label || data.carrier}</p>
+                </div>
+                <StatusBadge status={data.current_status} />
+              </div>
+
+              {/* Timeline */}
+              <div className="space-y-0">
+                {data.timeline.map((step, i) => (
+                  <div key={i} className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className={`w-3 h-3 rounded-full mt-1 shrink-0 border-2 ${step.done ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'}`} />
+                      {i < data.timeline.length - 1 && (
+                        <div className={`w-0.5 h-10 ${step.done ? 'bg-blue-300' : 'bg-gray-200'}`} />
+                      )}
+                    </div>
+                    <div className="pb-6">
+                      <p className={`text-sm font-semibold ${step.done ? 'text-gray-800' : 'text-gray-400'}`}>{step.status}</p>
+                      {step.location && <p className={`text-xs ${step.done ? 'text-gray-500' : 'text-gray-300'}`}>{step.location}</p>}
+                      {step.message && <p className={`text-xs ${step.done ? 'text-gray-500' : 'text-gray-300'}`}>{step.message}</p>}
+                      {step.timestamp && (
+                        <p className="text-[10px] text-gray-400 mt-0.5">
+                          {new Date(step.timestamp).toLocaleString('ko-KR')}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function SellerDeliveryPage() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
@@ -51,6 +112,7 @@ export default function SellerDeliveryPage() {
   const [deliveries, setDeliveries] = useState([])
   const [filterStatus, setFilterStatus] = useState('')
   const [search, setSearch] = useState('')
+  const [trackingModal, setTrackingModal] = useState(null)
 
   useEffect(() => {
     api.get('/deliveries/seller').then((res) => setDeliveries(res.data))
@@ -88,10 +150,10 @@ export default function SellerDeliveryPage() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-7">
           {[
-            { label: '전체', value: deliveries.length, bg: 'bg-purple-50 border-purple-200 text-purple-700' },
-            { label: '배송중', value: countStatus('IN_TRANSIT') + countStatus('OUT_FOR_DELIVERY'), bg: 'bg-blue-50 border-blue-200 text-blue-700' },
-            { label: '배송완료', value: countStatus('DELIVERED'), bg: 'bg-green-50 border-green-200 text-green-700' },
-            { label: '배송실패', value: countStatus('FAILED'), bg: 'bg-red-50 border-red-200 text-red-700' },
+            { label: '전체',    value: deliveries.length,                                          bg: 'bg-purple-50 border-purple-200 text-purple-700' },
+            { label: '배송중',  value: countStatus('IN_TRANSIT') + countStatus('OUT_FOR_DELIVERY'), bg: 'bg-blue-50 border-blue-200 text-blue-700' },
+            { label: '배송완료', value: countStatus('DELIVERED'),                                  bg: 'bg-green-50 border-green-200 text-green-700' },
+            { label: '배송실패', value: countStatus('FAILED'),                                     bg: 'bg-red-50 border-red-200 text-red-700' },
           ].map((s) => (
             <div key={s.label} className={`rounded-xl border p-4 ${s.bg}`}>
               <p className="text-sm font-medium opacity-80">{s.label}</p>
@@ -110,6 +172,7 @@ export default function SellerDeliveryPage() {
           <input type="text" placeholder="운송장번호 또는 주문번호 검색" value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-60" />
+          <span className="text-xs text-gray-400 ml-2">운송장번호 클릭 시 상세 추적</span>
         </div>
 
         {/* Table */}
@@ -126,40 +189,40 @@ export default function SellerDeliveryPage() {
               {filtered.length === 0 ? (
                 <tr><td colSpan={8} className="text-center py-10 text-gray-400">배송 데이터가 없습니다.</td></tr>
               ) : (
-                filtered.map((d) => {
-                  const url = trackingUrl(d.carrier, d.tracking_number)
-                  return (
-                    <tr key={d.id}
-                      className={`border-t border-gray-100 hover:bg-purple-50 transition-colors ${isDelayed(d) ? 'bg-red-50' : ''}`}>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">{d.order_number}</td>
-                      <td className="px-4 py-3 font-medium text-gray-800">{d.receiver_name}</td>
-                      <td className="px-4 py-3 text-gray-500 max-w-[160px] truncate">{d.receiver_address}</td>
-                      <td className="px-4 py-3"><CarrierBadge carrier={d.carrier} /></td>
-                      <td className="px-4 py-3 font-mono text-xs">
-                        {url ? (
-                          <a href={url} target="_blank" rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline">{d.tracking_number}</a>
-                        ) : (
-                          <span className="text-gray-600">{d.tracking_number}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={d.status} />
-                        {isDelayed(d) && (
-                          <span className="ml-1 px-1.5 py-0.5 rounded text-xs bg-red-200 text-red-700 font-semibold">지연</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{d.estimated_delivery || '—'}</td>
-                      <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{d.actual_delivery || '—'}</td>
-                    </tr>
-                  )
-                })
+                filtered.map((d) => (
+                  <tr key={d.id}
+                    className={`border-t border-gray-100 hover:bg-purple-50 transition-colors ${isDelayed(d) ? 'bg-red-50' : ''}`}>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">{d.order_number}</td>
+                    <td className="px-4 py-3 font-medium text-gray-800">{d.receiver_name}</td>
+                    <td className="px-4 py-3 text-gray-500 max-w-[160px] truncate">{d.receiver_address}</td>
+                    <td className="px-4 py-3"><CarrierBadge carrier={d.carrier} /></td>
+                    <td className="px-4 py-3 font-mono text-xs">
+                      <button
+                        onClick={() => setTrackingModal(d.tracking_number)}
+                        className="text-purple-600 hover:underline hover:text-purple-800 transition-colors">
+                        {d.tracking_number}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={d.status} />
+                      {isDelayed(d) && (
+                        <span className="ml-1 px-1.5 py-0.5 rounded text-xs bg-red-200 text-red-700 font-semibold">지연</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{d.estimated_delivery || '—'}</td>
+                    <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{d.actual_delivery || '—'}</td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
         <p className="text-xs text-gray-400 mt-2">총 {filtered.length}건</p>
       </div>
+
+      {trackingModal && (
+        <TrackingModal tracking={trackingModal} onClose={() => setTrackingModal(null)} />
+      )}
     </div>
   )
 }

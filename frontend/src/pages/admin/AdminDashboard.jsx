@@ -6,6 +6,7 @@ import {
 } from 'recharts'
 import useAuthStore from '../../store/authStore'
 import api from '../../api/axiosInstance'
+import NotificationBell from '../../components/NotificationBell'
 
 // ── Channel colours for pie chart ─────────────────────────────────────────────
 const CHANNEL_COLORS = {
@@ -21,11 +22,14 @@ const CHANNEL_LABELS = {
 }
 
 const NAV_CARDS = [
-  { title: '주문 관리',  icon: '📦', path: '/admin/orders',       desc: '전체 주문 현황 및 처리' },
-  { title: '재고 관리',  icon: '🏭', path: '/admin/inventory',    desc: '입출고 및 재고 현황' },
-  { title: '배송 관리',  icon: '🚚', path: '/admin/deliveries',   desc: '배송 현황 및 운송장 조회' },
-  { title: '정산 관리',  icon: '💰', path: '/admin/settlements',  desc: '셀러별 정산 내역 관리' },
-  { title: '반품 관리',  icon: '↩️', path: '/admin/returns',      desc: '반품 요청 검수 및 처리' },
+  { title: '주문 관리',    icon: '📦', path: '/admin/orders',        desc: '전체 주문 현황 및 처리' },
+  { title: '재고 관리',    icon: '🏭', path: '/admin/inventory',     desc: '입출고 및 재고 현황' },
+  { title: '배송 관리',    icon: '🚚', path: '/admin/deliveries',    desc: '배송 현황 및 운송장 조회' },
+  { title: '정산 관리',    icon: '💰', path: '/admin/settlements',   desc: '셀러별 정산 내역 관리' },
+  { title: '반품 관리',    icon: '↩️', path: '/admin/returns',       desc: '반품 요청 검수 및 처리' },
+  { title: '채널 연동',    icon: '🔗', path: '/admin/channel-sync',  desc: '판매채널 CSV 주문 동기화' },
+  { title: '프로모션',     icon: '🎯', path: '/admin/promotions',    desc: '프로모션 캘린더 및 수요 알림' },
+  { title: '수요 예측',    icon: '📈', path: '/admin/forecast',      desc: '재고 소진 예측 및 재입고 계획' },
 ]
 
 function StatCard({ label, value, color, icon }) {
@@ -74,6 +78,7 @@ export default function AdminDashboard() {
         <span className="text-xl font-bold">FullFit Admin</span>
         <div className="flex items-center gap-4">
           <span className="hidden sm:inline text-sm text-blue-100">{user?.email}</span>
+          <NotificationBell />
           <button onClick={handleLogout}
             className="bg-blue-900 hover:bg-blue-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">
             로그아웃
@@ -89,11 +94,12 @@ export default function AdminDashboard() {
         </div>
 
         {/* Stats cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
-          <StatCard label="오늘 주문"       value={stats?.today_orders}       color="blue"   icon="📋" />
-          <StatCard label="미처리 주문"      value={stats?.pending_orders}     color="yellow" icon="⏳" />
-          <StatCard label="재고 부족"        value={stats?.low_stock_count}    color="red"    icon="⚠️" />
-          <StatCard label="유통기한 임박"    value={stats?.expiry_alert_count} color="orange" icon="🕐" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-7">
+          <StatCard label="오늘 주문"       value={stats?.today_orders}        color="blue"   icon="📋" />
+          <StatCard label="미처리 주문"     value={stats?.pending_orders}      color="yellow" icon="⏳" />
+          <StatCard label="재고 부족"       value={stats?.low_stock_count}     color="red"    icon="⚠️" />
+          <StatCard label="유통기한 임박"   value={stats?.expiry_alert_count}  color="orange" icon="🕐" />
+          <StatCard label="수요 알림"       value={stats?.demand_alert_count}  color="red"    icon="📈" />
         </div>
 
         {/* Charts row */}
@@ -143,7 +149,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Quick navigation */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
           {NAV_CARDS.map((card) => (
             <div key={card.title} onClick={() => navigate(card.path)}
               className="bg-white rounded-xl shadow-sm border border-blue-100 p-5 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer">

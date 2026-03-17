@@ -5,13 +5,16 @@ import {
 } from 'recharts'
 import useAuthStore from '../../store/authStore'
 import api from '../../api/axiosInstance'
+import NotificationBell from '../../components/NotificationBell'
 
 const NAV_CARDS = [
-  { title: '주문 현황', icon: '🛒', path: '/seller/orders',      desc: '내 주문 접수 및 처리 현황' },
-  { title: '재고 조회', icon: '📊', path: '/seller/inventory',   desc: '현재 창고 보관 재고 확인' },
-  { title: '배송 추적', icon: '🔍', path: '/seller/deliveries',  desc: '출고된 상품 배송 현황' },
-  { title: '정산 내역', icon: '📑', path: '/seller/settlements', desc: '월별 수수료 및 정산 내역' },
-  { title: '반품 신청', icon: '↩️', path: '/seller/returns',     desc: '반품 요청 및 처리 현황' },
+  { title: '주문 현황',    icon: '🛒', path: '/seller/orders',      desc: '내 주문 접수 및 처리 현황' },
+  { title: '재고 조회',    icon: '📊', path: '/seller/inventory',   desc: '현재 창고 보관 재고 확인' },
+  { title: '배송 추적',    icon: '🔍', path: '/seller/deliveries',  desc: '출고된 상품 배송 현황' },
+  { title: '정산 내역',    icon: '📑', path: '/seller/settlements', desc: '월별 수수료 및 정산 내역' },
+  { title: '반품 신청',    icon: '↩️', path: '/seller/returns',     desc: '반품 요청 및 처리 현황' },
+  { title: '프로모션',     icon: '🎯', path: '/seller/promotions',  desc: '프로모션 캘린더 및 수요 알림' },
+  { title: '수요 예측',    icon: '📈', path: '/seller/forecast',    desc: '재고 소진 예측 및 재입고 계획' },
 ]
 
 function StatCard({ label, value, color, icon }) {
@@ -52,6 +55,7 @@ export default function SellerDashboard() {
         <span className="text-xl font-bold">FullFit 셀러</span>
         <div className="flex items-center gap-4">
           <span className="hidden sm:inline text-sm text-purple-100">{user?.email}</span>
+          <NotificationBell />
           <button onClick={handleLogout}
             className="bg-purple-900 hover:bg-purple-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">
             로그아웃
@@ -93,7 +97,7 @@ export default function SellerDashboard() {
         </div>
 
         {/* Quick navigation */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
           {NAV_CARDS.map((card) => (
             <div key={card.title} onClick={() => navigate(card.path)}
               className="bg-white rounded-xl shadow-sm border border-purple-100 p-5 hover:shadow-md hover:border-purple-300 transition-all cursor-pointer">

@@ -12,9 +12,12 @@ from backend.models.order_item import OrderItem            # noqa: F401
 from backend.models.delivery import Delivery, Carrier, DeliveryStatus  # noqa: F401
 from backend.models.settlement import Settlement, SettlementStatus      # noqa: F401
 from backend.models.return_request import ReturnRequest, ReturnReason, ReturnStatus  # noqa: F401
+from backend.models.sync_history import SyncHistory                                  # noqa: F401
+from backend.models.promotion import Promotion, PromotionChannel                     # noqa: F401
+from backend.models.notification import Notification, NotificationType               # noqa: F401
 from backend.core.security import hash_password
 from backend.routers import auth, inventory, order, delivery, settlement, stats
-from backend.routers import return_request
+from backend.routers import return_request, channel_sync, promotion, notification
 
 app = FastAPI(title="FullFit API", version="1.0.0")
 
@@ -33,6 +36,9 @@ app.include_router(delivery.router, tags=["Deliveries"])
 app.include_router(settlement.router, tags=["Settlements"])
 app.include_router(stats.router, tags=["Stats"])
 app.include_router(return_request.router, tags=["Returns"])
+app.include_router(channel_sync.router, tags=["ChannelSync"])
+app.include_router(promotion.router, tags=["Promotions"])
+app.include_router(notification.router, tags=["Notifications"])
 
 
 # ── Seed helpers ───────────────────────────────────────────────────────────────
@@ -232,6 +238,78 @@ def seed_returns(db):
     print("✅ Seed returns created.")
 
 
+def seed_promotions(db):
+    if db.query(Promotion).count() > 0:
+        return
+    promos = [
+        Promotion(name="올영데이", channel=PromotionChannel.OLIVEYOUNG,
+                  start_date=date(2026, 4, 25), end_date=date(2026, 4, 27),
+                  expected_order_multiplier=2.0, note="올리브영 정기 올영데이 이벤트"),
+        Promotion(name="올영세일 (봄)", channel=PromotionChannel.OLIVEYOUNG,
+                  start_date=date(2026, 6, 1), end_date=date(2026, 6, 7),
+                  expected_order_multiplier=4.0, note="봄 시즌 대형 세일"),
+        Promotion(name="직잭세일 (여름)", channel=PromotionChannel.ZIGZAG,
+                  start_date=date(2026, 6, 24), end_date=date(2026, 7, 8),
+                  expected_order_multiplier=3.5, note="지그재그 여름 특가"),
+        Promotion(name="블랙프라이데이", channel=PromotionChannel.ALL,
+                  start_date=date(2026, 11, 18), end_date=date(2026, 12, 2),
+                  expected_order_multiplier=5.0, note="연중 최대 세일 이벤트"),
+    ]
+    db.add_all(promos)
+    db.commit()
+    print("✅ Seed promotions created.")
+
+
+def seed_notifications(db):
+    if db.query(Notification).count() > 0:
+        return
+    admin = db.query(User).filter(User.email == "admin@fullfit.com").first()
+    worker = db.query(User).filter(User.email == "worker@fullfit.com").first()
+    seller = db.query(User).filter(User.email == "seller@fullfit.com").first()
+    if not admin or not seller:
+        return
+    notifications = [
+        # Admin notifications
+        Notification(user_id=admin.id, type=NotificationType.ORDER_RECEIVED,
+                     title="새 주문 접수", message="주문번호 FF-20260317-0009 (CAFE24) 접수되었습니다."),
+        Notification(user_id=admin.id, type=NotificationType.STOCK_LOW,
+                     title="재고 부족: 비타민C 앰플", message="비타민C 앰플 (SKN-002) 재고가 50개로 부족합니다."),
+        Notification(user_id=admin.id, type=NotificationType.EXPIRY_ALERT,
+                     title="유통기한 임박 경고", message="비타민C 앰플 LOT-2024-003 유통기한이 8일 남았습니다."),
+        Notification(user_id=admin.id, type=NotificationType.PROMOTION_ALERT,
+                     title="프로모션 D-39: 올영데이", message="올리브영 올영데이가 39일 후 시작됩니다. 재고를 미리 확보하세요."),
+        Notification(user_id=admin.id, type=NotificationType.SETTLEMENT_READY,
+                     title="2026-02 정산 확정", message="홍길동 셀러의 2026-02 정산이 확정되었습니다.", is_read=True),
+        # Seller notifications
+        Notification(user_id=seller.id, type=NotificationType.ORDER_RECEIVED,
+                     title="새 주문이 들어왔습니다", message="스마트스토어에서 새 주문이 접수되었습니다."),
+        Notification(user_id=seller.id, type=NotificationType.DELIVERY_UPDATE,
+                     title="배송 상태 변경: 배송중", message="주문 FF-20260317-0006 배송이 [배송중] 상태로 변경되었습니다."),
+        Notification(user_id=seller.id, type=NotificationType.SETTLEMENT_READY,
+                     title="2026-02 정산 확정", message="2026-02 정산이 확정되었습니다. 총 정산금액: ₩132,000"),
+        Notification(user_id=seller.id, type=NotificationType.STOCK_LOW,
+                     title="재고 부족: 비타민C 앰플", message="비타민C 앰플 (SKN-002) 재고가 50개로 부족합니다."),
+        Notification(user_id=seller.id, type=NotificationType.PROMOTION_ALERT,
+                     title="프로모션 예정: 올영데이", message="올영데이가 39일 후 시작됩니다. 재고를 미리 확보하세요.", is_read=True),
+    ]
+    if worker:
+        notifications += [
+            Notification(user_id=worker.id, type=NotificationType.ORDER_RECEIVED,
+                         title="새 피킹 작업 배정", message="주문 3건이 피킹 대기 중입니다."),
+            Notification(user_id=worker.id, type=NotificationType.EXPIRY_ALERT,
+                         title="유통기한 임박 상품 입고됨", message="비타민C 앰플 LOT-2024-003 유통기한이 8일 남았습니다."),
+            Notification(user_id=worker.id, type=NotificationType.STOCK_LOW,
+                         title="재고 부족 경고", message="비타민C 앰플 재고가 50개 미만입니다."),
+            Notification(user_id=worker.id, type=NotificationType.DELIVERY_UPDATE,
+                         title="출고 대기 2건", message="패킹 완료된 주문 2건이 출고 처리 대기 중입니다."),
+            Notification(user_id=worker.id, type=NotificationType.ORDER_RECEIVED,
+                         title="출고 완료 처리 필요", message="패킹 완료된 주문이 있습니다. 출고 처리해주세요.", is_read=True),
+        ]
+    db.add_all(notifications)
+    db.commit()
+    print("✅ Seed notifications created.")
+
+
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
@@ -243,6 +321,8 @@ def startup():
         seed_deliveries(db)
         seed_settlements(db)
         seed_returns(db)
+        seed_promotions(db)
+        seed_notifications(db)
     finally:
         db.close()
 

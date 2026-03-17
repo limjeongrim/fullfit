@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
 import api from '../../api/axiosInstance'
+import NotificationBell from '../../components/NotificationBell'
 
 const CARDS = [
   {
@@ -63,7 +64,8 @@ export default function WorkerDashboard() {
       <nav className="bg-green-700 text-white px-6 py-4 flex justify-between items-center shadow">
         <span className="text-xl font-bold">FullFit 작업자</span>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-green-100">{user?.email}</span>
+          <span className="hidden sm:inline text-sm text-green-100">{user?.email}</span>
+          <NotificationBell />
           <button onClick={handleLogout}
             className="bg-green-900 hover:bg-green-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">
             로그아웃

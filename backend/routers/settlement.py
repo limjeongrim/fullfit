@@ -13,6 +13,8 @@ from backend.models.order import Order, OrderStatus
 from backend.models.settlement import Settlement, SettlementStatus
 from backend.schemas.settlement import SettlementGenerate, SettlementResponse
 from backend.core.dependencies import require_role
+from backend.core.notify import create_notification
+from backend.models.notification import NotificationType
 
 router = APIRouter()
 
@@ -148,6 +150,11 @@ def confirm_settlement(
 
     s.status = SettlementStatus.CONFIRMED
     s.confirmed_at = datetime.utcnow()
+    create_notification(
+        db, s.seller_id, NotificationType.SETTLEMENT_READY,
+        f"{s.year_month} 정산 확정",
+        f"{s.year_month} 정산이 확정되었습니다. 총 정산금액: ₩{int(s.total_fee):,}",
+    )
     db.commit()
     db.refresh(s)
     s = db.query(Settlement).filter(Settlement.id == s.id).first()

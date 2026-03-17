@@ -15,6 +15,8 @@ from backend.schemas.order import (
     OrderStatusUpdate, OrderItemResponse,
 )
 from backend.core.dependencies import get_current_user, require_role
+from backend.core.notify import create_notification
+from backend.models.notification import NotificationType
 
 router = APIRouter()
 
@@ -237,6 +239,15 @@ def create_order(
         seller_id = current_user.id  # Admin creates under their own account for now
 
     order = _build_order(db, data, seller_id)
+    db.flush()
+    # Notify admins about new order
+    admins = db.query(User).filter(User.role == UserRole.ADMIN).all()
+    for admin in admins:
+        create_notification(
+            db, admin.id, NotificationType.ORDER_RECEIVED,
+            "새 주문 접수",
+            f"주문번호 {order.order_number} ({data.channel.value}) 접수되었습니다.",
+        )
     db.commit()
     db.refresh(order)
     # reload with relationships

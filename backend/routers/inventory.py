@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models.user import User, UserRole
@@ -13,6 +14,9 @@ from backend.schemas.inventory import (
     InventoryResponse,
 )
 from backend.core.dependencies import require_role
+from backend.core.notify import create_notification
+from backend.models.notification import NotificationType
+from backend.models.user import UserRole as _UserRole
 
 router = APIRouter()
 
@@ -125,6 +129,23 @@ def register_inbound(
 
     db.commit()
     db.refresh(inbound)
+
+    # Notify if stock is low after inbound (edge case: lot qty was subtracted elsewhere)
+    total_stock = db.query(func.sum(Inventory.quantity)).filter(Inventory.product_id == data.product_id).scalar() or 0
+    if total_stock < 50:
+        admins = db.query(User).filter(User.role == _UserRole.ADMIN).all()
+        for admin in admins:
+            create_notification(
+                db, admin.id, NotificationType.STOCK_LOW,
+                f"재고 부족: {product.name}",
+                f"{product.name} ({product.sku}) 재고가 {total_stock}개로 부족합니다.",
+            )
+        create_notification(
+            db, product.seller_id, NotificationType.STOCK_LOW,
+            f"재고 부족: {product.name}",
+            f"{product.name} ({product.sku}) 재고가 {total_stock}개로 부족합니다.",
+        )
+        db.commit()
 
     return InboundResponse(
         id=inbound.id,

@@ -10,6 +10,9 @@ import AdminOrderPage from './pages/admin/OrderPage'
 import AdminDeliveryPage from './pages/admin/DeliveryPage'
 import AdminSettlementPage from './pages/admin/SettlementPage'
 import AdminReturnPage from './pages/admin/ReturnPage'
+import AdminChannelSyncPage from './pages/admin/ChannelSyncPage'
+import AdminPromotionPage from './pages/admin/PromotionPage'
+import AdminForecastPage from './pages/admin/ForecastPage'
 import WorkerDashboard from './pages/worker/WorkerDashboard'
 import PickingPage from './pages/worker/PickingPage'
 import InboundPage from './pages/worker/InboundPage'
@@ -20,6 +23,8 @@ import SellerOrderPage from './pages/seller/OrderPage'
 import SellerDeliveryPage from './pages/seller/DeliveryPage'
 import SellerSettlementPage from './pages/seller/SettlementPage'
 import SellerReturnPage from './pages/seller/ReturnPage'
+import SellerPromotionPage from './pages/seller/PromotionPage'
+import SellerForecastPage from './pages/seller/ForecastPage'
 
 export default function App() {
   const loadFromStorage = useAuthStore((s) => s.loadFromStorage)
@@ -39,12 +44,15 @@ export default function App() {
           element={
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <Routes>
-                <Route path="dashboard"   element={<AdminDashboard />} />
-                <Route path="inventory"   element={<AdminInventoryPage />} />
-                <Route path="orders"      element={<AdminOrderPage />} />
-                <Route path="deliveries"  element={<AdminDeliveryPage />} />
-                <Route path="settlements" element={<AdminSettlementPage />} />
-                <Route path="returns"     element={<AdminReturnPage />} />
+                <Route path="dashboard"    element={<AdminDashboard />} />
+                <Route path="inventory"    element={<AdminInventoryPage />} />
+                <Route path="orders"       element={<AdminOrderPage />} />
+                <Route path="deliveries"   element={<AdminDeliveryPage />} />
+                <Route path="settlements"  element={<AdminSettlementPage />} />
+                <Route path="returns"      element={<AdminReturnPage />} />
+                <Route path="channel-sync" element={<AdminChannelSyncPage />} />
+                <Route path="promotions"   element={<AdminPromotionPage />} />
+                <Route path="forecast"     element={<AdminForecastPage />} />
                 <Route path="*" element={<Navigate to="dashboard" replace />} />
               </Routes>
             </ProtectedRoute>
@@ -77,6 +85,8 @@ export default function App() {
                 <Route path="deliveries"  element={<SellerDeliveryPage />} />
                 <Route path="settlements" element={<SellerSettlementPage />} />
                 <Route path="returns"     element={<SellerReturnPage />} />
+                <Route path="promotions"  element={<SellerPromotionPage />} />
+                <Route path="forecast"    element={<SellerForecastPage />} />
                 <Route path="*" element={<Navigate to="dashboard" replace />} />
               </Routes>
             </ProtectedRoute>
