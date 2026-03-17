@@ -79,6 +79,8 @@ export default function AdminDeliveryPage() {
   const [orders, setOrders] = useState([])
   const [filterStatus, setFilterStatus] = useState('')
   const [filterCarrier, setFilterCarrier] = useState('')
+  const [filterSeller, setFilterSeller] = useState('')
+  const [sellers, setSellers] = useState([])
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ order_id: '', carrier: 'CJ', tracking_number: '', estimated_delivery: '', note: '' })
@@ -88,7 +90,9 @@ export default function AdminDeliveryPage() {
   const showToast = (msg, type = 'success') => addToast(type, msg)
 
   const fetchDeliveries = async () => {
-    const res = await api.get('/deliveries/')
+    const params = new URLSearchParams()
+    if (filterSeller) params.set('seller_id', filterSeller)
+    const res = await api.get(`/deliveries/?${params}`)
     setDeliveries(res.data)
   }
 
@@ -105,7 +109,11 @@ export default function AdminDeliveryPage() {
     } catch (e) { console.error(e) }
   }
 
-  useEffect(() => { fetchDeliveries() }, [])
+  useEffect(() => {
+    fetchDeliveries()
+    api.get('/sellers/').then(r => setSellers(r.data)).catch(() => {})
+  }, [])
+  useEffect(() => { fetchDeliveries() }, [filterSeller])
   useEffect(() => { if (deliveries.length >= 0) fetchEligibleOrders() }, [deliveries])
 
   const handleLogout = () => { logout(); navigate('/login') }
@@ -205,6 +213,13 @@ export default function AdminDeliveryPage() {
               className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
               <option value="">전체 택배사</option>
               {ALL_CARRIERS.map((c) => <option key={c} value={c}>{CARRIER_META[c].label}</option>)}
+            </select>
+            <select value={filterSeller} onChange={(e) => setFilterSeller(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+              <option value="">전체 셀러</option>
+              {sellers.map((s) => (
+                <option key={s.id} value={s.id}>{s.full_name} ({s.company_name || s.email})</option>
+              ))}
             </select>
             <input type="text" placeholder="운송장번호 또는 주문번호 검색" value={search}
               onChange={(e) => setSearch(e.target.value)}

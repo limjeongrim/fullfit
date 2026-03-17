@@ -32,15 +32,6 @@ const CARDS = [
   },
 ]
 
-function StatChip({ label, value, cls }) {
-  return (
-    <div className={`rounded-xl border p-4 ${cls}`}>
-      <p className="text-xs font-medium opacity-80">{label}</p>
-      <p className="text-3xl font-bold mt-1">{value ?? '—'}</p>
-    </div>
-  )
-}
-
 export default function WorkerDashboard() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
@@ -61,54 +52,64 @@ export default function WorkerDashboard() {
 
   return (
     <div className="min-h-screen bg-green-50">
-      <nav className="bg-green-700 text-white px-6 py-4 flex justify-between items-center shadow">
+      <nav className="bg-green-700 text-white px-5 py-4 flex justify-between items-center shadow">
         <span className="text-xl font-bold">FullFit 작업자</span>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <span className="hidden sm:inline text-sm text-green-100">{user?.email}</span>
           <NotificationBell />
           <button onClick={handleLogout}
-            className="bg-green-900 hover:bg-green-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">
+            className="bg-green-900 hover:bg-green-800 text-white text-sm px-4 py-2 rounded-lg transition-colors">
             로그아웃
           </button>
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="max-w-2xl mx-auto px-4 py-6">
         {/* Greeting */}
-        <div className="mb-7">
-          <h2 className="text-2xl font-bold text-green-900">
-            안녕하세요, {user?.full_name}님 (창고 작업자)
-          </h2>
-          <p className="text-green-600 mt-1 text-sm">오늘도 수고해주세요!</p>
+        <div className="mb-6">
+          <h2 className="text-3xl font-bold text-green-900">안녕하세요,</h2>
+          <h2 className="text-3xl font-bold text-green-900">{user?.full_name}님!</h2>
+          <p className="text-green-600 mt-2 text-base">오늘도 수고해주세요!</p>
         </div>
 
-        {/* Quick stats */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <StatChip label="피킹 대기"  value={counts.received} cls="bg-blue-50 border-blue-200 text-blue-700" />
-          <StatChip label="패킹 대기"  value={counts.picking}  cls="bg-yellow-50 border-yellow-200 text-yellow-700" />
-          <StatChip label="출고 대기"  value={counts.packed}   cls="bg-orange-50 border-orange-200 text-orange-700" />
+        {/* Quick stats — large and touch-friendly */}
+        <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 text-center">
+            <p className="text-sm font-semibold text-blue-600">피킹 대기</p>
+            <p className="text-5xl font-bold text-blue-700 mt-1">{counts.received ?? '—'}</p>
+          </div>
+          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-4 text-center">
+            <p className="text-sm font-semibold text-yellow-600">패킹 대기</p>
+            <p className="text-5xl font-bold text-yellow-700 mt-1">{counts.picking ?? '—'}</p>
+          </div>
+          <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 text-center">
+            <p className="text-sm font-semibold text-orange-600">출고 대기</p>
+            <p className="text-5xl font-bold text-orange-700 mt-1">{counts.packed ?? '—'}</p>
+          </div>
         </div>
 
-        {/* Navigation cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        {/* Navigation cards — large and touch-friendly */}
+        <div className="flex flex-col gap-4">
           {CARDS.map((card) => {
             const badge =
               card.statusKey === 'picking_pending' ? counts.received :
               card.statusKey === 'outbound_pending' ? counts.packed : null
 
             return (
-              <div key={card.title} onClick={() => navigate(card.path)}
-                className="bg-white rounded-xl shadow-sm border border-green-100 p-6 hover:shadow-md hover:border-green-300 transition-all cursor-pointer">
-                <div className="text-3xl mb-3">{card.icon}</div>
-                <h3 className="text-lg font-semibold text-gray-800">{card.title}</h3>
-                <p className="text-gray-500 text-sm mt-1">{card.desc}</p>
-                {badge !== null && badge > 0 && (
-                  <span className={`mt-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${card.badgeCls}`}>
-                    {badge}건
-                  </span>
-                )}
-                <span className="mt-3 ml-2 inline-block text-green-600 text-xs font-medium">바로가기 →</span>
-              </div>
+              <button key={card.title} onClick={() => navigate(card.path)}
+                className="bg-white rounded-2xl shadow-sm border-2 border-green-100 p-6 hover:shadow-md hover:border-green-300 active:bg-green-50 transition-all text-left w-full min-h-[110px] flex items-center gap-5">
+                <span className="text-5xl shrink-0">{card.icon}</span>
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-gray-800">{card.title}</h3>
+                  <p className="text-gray-500 text-sm mt-0.5">{card.desc}</p>
+                  {badge !== null && badge > 0 && (
+                    <span className={`mt-2 inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-bold ${card.badgeCls}`}>
+                      {badge}건 대기 중
+                    </span>
+                  )}
+                </div>
+                <span className="text-green-500 text-2xl">›</span>
+              </button>
             )
           })}
         </div>

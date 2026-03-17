@@ -13,6 +13,7 @@ import AdminReturnPage from './pages/admin/ReturnPage'
 import AdminChannelSyncPage from './pages/admin/ChannelSyncPage'
 import AdminPromotionPage from './pages/admin/PromotionPage'
 import AdminForecastPage from './pages/admin/ForecastPage'
+import SellerManagementPage from './pages/admin/SellerManagementPage'
 import WorkerDashboard from './pages/worker/WorkerDashboard'
 import PickingPage from './pages/worker/PickingPage'
 import InboundPage from './pages/worker/InboundPage'
@@ -53,6 +54,7 @@ export default function App() {
                 <Route path="channel-sync" element={<AdminChannelSyncPage />} />
                 <Route path="promotions"   element={<AdminPromotionPage />} />
                 <Route path="forecast"     element={<AdminForecastPage />} />
+                <Route path="sellers"     element={<SellerManagementPage />} />
                 <Route path="*" element={<Navigate to="dashboard" replace />} />
               </Routes>
             </ProtectedRoute>

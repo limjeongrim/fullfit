@@ -31,6 +31,8 @@ export default function AdminReturnPage() {
   const addToast = useToastStore((s) => s.addToast)
 
   const [returns, setReturns] = useState([])
+  const [filterSeller, setFilterSeller] = useState('')
+  const [sellers, setSellers] = useState([])
   const [showModal, setShowModal] = useState(false)
   const [selected, setSelected] = useState(null) // { id, targetStatus }
   const [inspectionNote, setInspectionNote] = useState('')
@@ -38,14 +40,20 @@ export default function AdminReturnPage() {
 
   const fetchReturns = async () => {
     try {
-      const res = await api.get('/returns/')
+      const params = new URLSearchParams()
+      if (filterSeller) params.set('seller_id', filterSeller)
+      const res = await api.get(`/returns/?${params}`)
       setReturns(res.data)
     } catch (e) {
       console.error(e)
     }
   }
 
-  useEffect(() => { fetchReturns() }, [])
+  useEffect(() => {
+    fetchReturns()
+    api.get('/sellers/').then(r => setSellers(r.data)).catch(() => {})
+  }, [])
+  useEffect(() => { fetchReturns() }, [filterSeller])
 
   const handleLogout = () => { logout(); navigate('/login') }
 
@@ -104,6 +112,17 @@ export default function AdminReturnPage() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Seller filter */}
+        <div className="flex items-center gap-2 mb-5">
+          <select value={filterSeller} onChange={(e) => setFilterSeller(e.target.value)}
+            className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+            <option value="">전체 셀러</option>
+            {sellers.map((s) => (
+              <option key={s.id} value={s.id}>{s.full_name} ({s.company_name || s.email})</option>
+            ))}
+          </select>
+        </div>
+
         <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-blue-100">
           <table className="w-full text-sm">
             <thead className="bg-blue-700 text-white">

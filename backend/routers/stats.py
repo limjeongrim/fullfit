@@ -8,6 +8,7 @@ from backend.models.order import Order, OrderStatus, OrderChannel
 from backend.models.order_item import OrderItem
 from backend.models.inventory import Inventory
 from backend.models.product import Product
+from backend.models.promotion import Promotion
 from backend.core.dependencies import require_role
 
 router = APIRouter()
@@ -59,12 +60,51 @@ def _demand_forecast(db: Session, seller_id: int = None) -> list:
         products_q = products_q.filter(Product.seller_id == seller_id)
     products = products_q.all()
 
+    # Upcoming promotions within 60 days for promotion risk
+    today = date.today()
+    upcoming_promos = (
+        db.query(Promotion)
+        .filter(
+            Promotion.start_date <= today + timedelta(days=60),
+            Promotion.end_date >= today,
+        )
+        .all()
+    )
+
     results = []
     for p in products:
         total_sold = sales_map.get(p.id, 0)
         avg_daily = round(total_sold / 30.0, 2)
         current_stock = inv_map.get(p.id, 0)
         days_of_stock = round(current_stock / avg_daily, 1) if avg_daily > 0 else 999
+
+        # Promotion risk: find worst-case upcoming promotion
+        max_required = 0.0
+        worst_promo = None
+        for promo in upcoming_promos:
+            duration = max((promo.end_date - promo.start_date).days + 1, 1)
+            daily_base = avg_daily if avg_daily > 0 else 0.5
+            required = daily_base * promo.expected_order_multiplier * duration
+            if required > max_required:
+                max_required = required
+                worst_promo = promo
+
+        if worst_promo and max_required > 0:
+            if current_stock < max_required:
+                promo_risk = "HIGH"
+            elif current_stock < max_required * 1.5:
+                promo_risk = "MEDIUM"
+            else:
+                promo_risk = "LOW"
+            upcoming_promotion = {
+                "name": worst_promo.name,
+                "start_date": str(worst_promo.start_date),
+                "multiplier": worst_promo.expected_order_multiplier,
+            }
+        else:
+            promo_risk = "LOW"
+            upcoming_promotion = None
+
         results.append({
             "product_id": p.id,
             "product_name": p.name,
@@ -75,6 +115,9 @@ def _demand_forecast(db: Session, seller_id: int = None) -> list:
             "forecast_7day": round(avg_daily * 7),
             "forecast_30day": round(avg_daily * 30),
             "reorder_recommended": days_of_stock < 14,
+            "promotion_risk": promo_risk,
+            "upcoming_promotion": upcoming_promotion,
+            "promotion_required_stock": round(max_required),
         })
     results.sort(key=lambda x: x["days_of_stock"])
     return results
@@ -109,7 +152,6 @@ def admin_stats(
         .scalar() or 0
     )
 
-    # Demand alert count (products needing reorder)
     forecast = _demand_forecast(db)
     demand_alert_count = sum(1 for f in forecast if f["reorder_recommended"])
 

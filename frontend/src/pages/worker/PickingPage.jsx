@@ -9,6 +9,14 @@ const CHANNEL_LABELS = {
   ZIGZAG: '지그재그', CAFE24: '카페24', MANUAL: '수동',
 }
 
+const CHANNEL_CLS = {
+  SMARTSTORE: 'bg-green-100 text-green-700',
+  OLIVEYOUNG: 'bg-orange-100 text-orange-700',
+  ZIGZAG:     'bg-pink-100 text-pink-700',
+  CAFE24:     'bg-blue-100 text-blue-700',
+  MANUAL:     'bg-gray-100 text-gray-600',
+}
+
 const STATUS_META = {
   RECEIVED: { label: '접수',   cls: 'bg-blue-100 text-blue-700' },
   PICKING:  { label: '피킹중', cls: 'bg-yellow-100 text-yellow-700' },
@@ -20,6 +28,7 @@ export default function PickingPage() {
   const addToast = useToastStore((s) => s.addToast)
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [acting, setActing] = useState(null)
 
   const fetchOrders = async () => {
     setLoading(true)
@@ -28,7 +37,6 @@ export default function PickingPage() {
       const active = res.data.items.filter(
         (o) => o.status === 'RECEIVED' || o.status === 'PICKING'
       )
-      // FEFO-style: RECEIVED first, then PICKING, each sorted by created_at asc
       active.sort((a, b) => {
         if (a.status !== b.status) return a.status === 'RECEIVED' ? -1 : 1
         return new Date(a.created_at) - new Date(b.created_at)
@@ -44,98 +52,120 @@ export default function PickingPage() {
   const handleLogout = () => { logout(); navigate('/login') }
 
   const handleAction = async (orderId, nextStatus) => {
+    setActing(orderId)
     try {
       await api.patch(`/orders/${orderId}/status`, { status: nextStatus })
       await fetchOrders()
       addToast('success', nextStatus === 'PICKING' ? '피킹이 시작되었습니다.' : '패킹 완료 처리되었습니다.')
     } catch (err) {
       addToast('error', err.response?.data?.detail || '처리 실패')
+    } finally {
+      setActing(null)
     }
   }
 
+  const doneCount = 0  // only active orders shown
+  const receivedCount = orders.filter(o => o.status === 'RECEIVED').length
+  const pickingCount = orders.filter(o => o.status === 'PICKING').length
+
   return (
     <div className="min-h-screen bg-green-50">
-      <nav className="bg-green-700 text-white px-6 py-4 flex justify-between items-center shadow">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/worker/dashboard')} className="text-green-200 hover:text-white text-sm">← 대시보드</button>
-          <span className="text-xl font-bold">오늘의 피킹 목록</span>
+      <nav className="bg-green-700 text-white px-5 py-4 flex justify-between items-center shadow">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate('/worker/dashboard')} className="text-green-200 hover:text-white text-sm p-1">←</button>
+          <span className="text-xl font-bold">피킹 목록</span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <span className="hidden sm:inline text-sm text-green-100">{user?.email}</span>
-          <button onClick={handleLogout} className="bg-green-900 hover:bg-green-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">로그아웃</button>
+          <button onClick={handleLogout} className="bg-green-900 hover:bg-green-800 text-white text-sm px-4 py-2 rounded-lg transition-colors">로그아웃</button>
         </div>
       </nav>
 
-      <div className="max-w-6xl mx-auto px-6 py-8">
-        {/* Count banner */}
+      {/* Sticky status bar */}
+      <div className="sticky top-0 z-10 bg-white border-b border-green-100 shadow-sm px-5 py-3 flex items-center gap-4">
+        <span className="text-sm font-semibold text-gray-700">오늘 처리 현황</span>
+        <span className="px-3 py-1 rounded-full text-sm font-bold bg-blue-100 text-blue-700">
+          접수 {receivedCount}건
+        </span>
+        <span className="px-3 py-1 rounded-full text-sm font-bold bg-yellow-100 text-yellow-700">
+          피킹중 {pickingCount}건
+        </span>
+        <span className="ml-auto text-sm text-gray-500">총 {orders.length}건</span>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 py-5">
+        {/* Status banner */}
         {!loading && (
-          <div className={`mb-5 rounded-xl px-5 py-3 font-semibold text-sm ${
+          <div className={`mb-4 rounded-2xl px-5 py-3 font-semibold text-base ${
             orders.length > 0
-              ? 'bg-yellow-50 border border-yellow-300 text-yellow-800'
-              : 'bg-green-50 border border-green-300 text-green-700'
+              ? 'bg-yellow-50 border-2 border-yellow-300 text-yellow-800'
+              : 'bg-green-50 border-2 border-green-300 text-green-700'
           }`}>
             {orders.length > 0
-              ? `📋 총 ${orders.length}건의 주문을 처리해야 합니다`
-              : '현재 처리할 주문이 없습니다 ✅'}
+              ? `📋 ${orders.length}건 처리 필요`
+              : '✅ 모든 작업 완료!'}
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-green-100">
-          <table className="w-full text-sm">
-            <thead className="bg-green-700 text-white">
-              <tr>
-                {['주문번호', '채널', '수신자', '주소', '상품 수', '주문일시', '상태', '액션'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={8} className="text-center py-10 text-gray-400">로딩 중...</td></tr>
-              ) : orders.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-10 text-gray-400">처리할 주문이 없습니다.</td></tr>
-              ) : (
-                orders.map((o) => {
-                  const m = STATUS_META[o.status]
-                  return (
-                    <tr key={o.id} className={`border-t border-gray-100 hover:bg-green-50 transition-colors ${
-                      o.status === 'PICKING' ? 'bg-yellow-50' : ''
-                    }`}>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">{o.order_number}</td>
-                      <td className="px-4 py-3 text-gray-600 text-xs">{CHANNEL_LABELS[o.channel] || o.channel}</td>
-                      <td className="px-4 py-3 font-medium text-gray-800">{o.receiver_name}</td>
-                      <td className="px-4 py-3 text-gray-500 max-w-[160px] truncate">{o.receiver_address}</td>
-                      <td className="px-4 py-3 text-center text-gray-700">
-                        {/* order_items count not in list response — show dash */}
-                        —
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                        {new Date(o.created_at).toLocaleString('ko-KR')}
-                      </td>
-                      <td className="px-4 py-3">
+        {/* Order cards */}
+        {loading ? (
+          <div className="text-center py-16 text-gray-400 text-lg">로딩 중...</div>
+        ) : orders.length === 0 ? (
+          <div className="text-center py-16 text-gray-400">
+            <div className="text-5xl mb-4">🎉</div>
+            <p className="text-lg font-semibold">처리할 주문이 없습니다</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {orders.map((o) => {
+              const m = STATUS_META[o.status]
+              const isActing = acting === o.id
+              return (
+                <div key={o.id}
+                  className={`bg-white rounded-2xl shadow-sm border-2 p-5 transition-all ${
+                    o.status === 'PICKING' ? 'border-yellow-300 bg-yellow-50' : 'border-green-100'
+                  }`}>
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <span className="font-mono text-sm text-gray-500">{o.order_number}</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${CHANNEL_CLS[o.channel] || 'bg-gray-100 text-gray-600'}`}>
+                          {CHANNEL_LABELS[o.channel] || o.channel}
+                        </span>
                         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${m.cls}`}>{m.label}</span>
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {o.status === 'RECEIVED' && (
-                          <button onClick={() => handleAction(o.id, 'PICKING')}
-                            className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white text-xs rounded-lg font-semibold transition-colors">
-                            피킹 시작
-                          </button>
-                        )}
-                        {o.status === 'PICKING' && (
-                          <button onClick={() => handleAction(o.id, 'PACKED')}
-                            className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs rounded-lg font-semibold transition-colors">
-                            패킹 완료
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                      </div>
+                    </div>
+                    <span className="text-xs text-gray-400 whitespace-nowrap">
+                      {new Date(o.created_at).toLocaleDateString('ko-KR')}
+                    </span>
+                  </div>
+
+                  <div className="mb-4">
+                    <p className="text-lg font-bold text-gray-800">{o.receiver_name}</p>
+                    <p className="text-sm text-gray-500 mt-0.5 truncate">{o.receiver_address}</p>
+                  </div>
+
+                  {o.status === 'RECEIVED' && (
+                    <button
+                      onClick={() => handleAction(o.id, 'PICKING')}
+                      disabled={isActing}
+                      className="w-full py-4 bg-yellow-500 hover:bg-yellow-600 active:bg-yellow-700 text-white text-base font-bold rounded-xl transition-colors disabled:opacity-50">
+                      {isActing ? '처리 중...' : '📦 피킹 시작'}
+                    </button>
+                  )}
+                  {o.status === 'PICKING' && (
+                    <button
+                      onClick={() => handleAction(o.id, 'PACKED')}
+                      disabled={isActing}
+                      className="w-full py-4 bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-base font-bold rounded-xl transition-colors disabled:opacity-50">
+                      {isActing ? '처리 중...' : '✅ 패킹 완료'}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

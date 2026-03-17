@@ -1,6 +1,6 @@
 from datetime import date, timedelta
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from backend.database import get_db
@@ -41,15 +41,14 @@ def _to_inv_response(inv: Inventory) -> InventoryResponse:
 
 @router.get("/inventory/", response_model=List[InventoryResponse])
 def list_inventory(
+    seller_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.WORKER])),
 ):
-    rows = (
-        db.query(Inventory)
-        .join(Product)
-        .order_by(Inventory.expiry_date.asc())
-        .all()
-    )
+    q = db.query(Inventory).join(Product)
+    if seller_id:
+        q = q.filter(Product.seller_id == seller_id)
+    rows = q.order_by(Inventory.expiry_date.asc()).all()
     return [_to_inv_response(inv) for inv in rows]
 
 

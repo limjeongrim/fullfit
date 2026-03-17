@@ -110,6 +110,7 @@ def list_orders(
     status: Optional[OrderStatus] = Query(None),
     channel: Optional[OrderChannel] = Query(None),
     search: Optional[str] = Query(None),
+    seller_id: Optional[int] = Query(None),
     skip: int = 0,
     limit: int = 50,
     db: Session = Depends(get_db),
@@ -125,6 +126,8 @@ def list_orders(
             Order.order_number.ilike(f"%{search}%") |
             Order.receiver_name.ilike(f"%{search}%")
         )
+    if seller_id:
+        q = q.filter(Order.seller_id == seller_id)
     total = q.count()
     orders = q.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
     return OrderListResponse(total=total, items=[_order_to_list_item(o) for o in orders])

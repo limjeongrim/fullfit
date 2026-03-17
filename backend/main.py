@@ -17,7 +17,7 @@ from backend.models.promotion import Promotion, PromotionChannel                
 from backend.models.notification import Notification, NotificationType               # noqa: F401
 from backend.core.security import hash_password
 from backend.routers import auth, inventory, order, delivery, settlement, stats
-from backend.routers import return_request, channel_sync, promotion, notification
+from backend.routers import return_request, channel_sync, promotion, notification, seller_management
 
 app = FastAPI(title="FullFit API", version="1.0.0")
 
@@ -39,6 +39,7 @@ app.include_router(return_request.router, tags=["Returns"])
 app.include_router(channel_sync.router, tags=["ChannelSync"])
 app.include_router(promotion.router, tags=["Promotions"])
 app.include_router(notification.router, tags=["Notifications"])
+app.include_router(seller_management.router, tags=["Sellers"])
 
 
 # ── Seed helpers ───────────────────────────────────────────────────────────────
@@ -48,11 +49,21 @@ def seed_users(db):
         return
     users = [
         User(email="admin@fullfit.com", hashed_password=hash_password("admin1234"),
-             role=UserRole.ADMIN, full_name="김철수"),
+             role=UserRole.ADMIN, full_name="김철수", joined_at=datetime(2025, 1, 1)),
         User(email="worker@fullfit.com", hashed_password=hash_password("worker1234"),
-             role=UserRole.WORKER, full_name="이영희"),
+             role=UserRole.WORKER, full_name="이영희", joined_at=datetime(2025, 1, 1)),
         User(email="seller@fullfit.com", hashed_password=hash_password("seller1234"),
-             role=UserRole.SELLER, full_name="홍길동"),
+             role=UserRole.SELLER, full_name="홍길동",
+             company_name="길동뷰티", business_number="000-00-00001",
+             joined_at=datetime(2025, 6, 1)),
+        User(email="seller2@fullfit.com", hashed_password=hash_password("seller1234"),
+             role=UserRole.SELLER, full_name="김미래",
+             company_name="미래코스메틱", business_number="123-45-67891",
+             joined_at=datetime(2025, 9, 15)),
+        User(email="seller3@fullfit.com", hashed_password=hash_password("seller1234"),
+             role=UserRole.SELLER, full_name="박준호",
+             company_name="준호뷰티", business_number="987-65-43210",
+             joined_at=datetime(2026, 1, 20)),
     ]
     db.add_all(users)
     db.commit()
@@ -238,6 +249,90 @@ def seed_returns(db):
     print("✅ Seed returns created.")
 
 
+def seed_extra_sellers(db):
+    """Seed inventory + orders for seller2 and seller3."""
+    seller2 = db.query(User).filter(User.email == "seller2@fullfit.com").first()
+    seller3 = db.query(User).filter(User.email == "seller3@fullfit.com").first()
+    if not seller2 or not seller3:
+        return
+    if db.query(Product).filter(Product.seller_id == seller2.id).count() > 0:
+        return
+
+    # Seller2 products
+    ps2_1 = Product(seller_id=seller2.id, name="립스틱 레드", sku="LIP-001",
+                    barcode="8809000000001", category="색조", storage_type=StorageType.ROOM_TEMP)
+    ps2_2 = Product(seller_id=seller2.id, name="아이섀도우 팔레트", sku="EYE-001",
+                    barcode="8809000000002", category="색조", storage_type=StorageType.ROOM_TEMP)
+    db.add_all([ps2_1, ps2_2])
+
+    # Seller3 products
+    ps3_1 = Product(seller_id=seller3.id, name="클렌징폼", sku="CLN-001",
+                    barcode="8809000000003", category="클렌징", storage_type=StorageType.ROOM_TEMP)
+    ps3_2 = Product(seller_id=seller3.id, name="토너패드", sku="TON-001",
+                    barcode="8809000000004", category="스킨케어", storage_type=StorageType.ROOM_TEMP)
+    db.add_all([ps3_1, ps3_2])
+    db.flush()
+
+    # Inventory for seller2
+    db.add_all([
+        Inventory(product_id=ps2_1.id, lot_number="LOT-S2-001",
+                  expiry_date=date(2027, 1, 1), quantity=100, inbound_date=date(2026, 2, 1)),
+        Inventory(product_id=ps2_2.id, lot_number="LOT-S2-002",
+                  expiry_date=date(2027, 1, 1), quantity=100, inbound_date=date(2026, 2, 1)),
+    ])
+
+    # Inventory for seller3
+    db.add_all([
+        Inventory(product_id=ps3_1.id, lot_number="LOT-S3-001",
+                  expiry_date=date(2026, 8, 1), quantity=80, inbound_date=date(2026, 2, 15)),
+        Inventory(product_id=ps3_2.id, lot_number="LOT-S3-002",
+                  expiry_date=date(2026, 8, 1), quantity=80, inbound_date=date(2026, 2, 15)),
+    ])
+    db.flush()
+
+    today = datetime.now().strftime("%Y%m%d")
+    now = datetime.utcnow()
+
+    # 5 orders for seller2
+    s2_orders = [
+        (OrderChannel.SMARTSTORE,  OrderStatus.RECEIVED,  "강다현", "010-1111-2222", "서울 강북구", Decimal("38000"), ps2_1),
+        (OrderChannel.OLIVEYOUNG,  OrderStatus.PICKING,   "윤서준", "010-2222-3333", "경기 수원시", Decimal("55000"), ps2_2),
+        (OrderChannel.CAFE24,      OrderStatus.SHIPPED,   "임채영", "010-3333-4444", "부산 연제구", Decimal("42000"), ps2_1),
+        (OrderChannel.ZIGZAG,      OrderStatus.DELIVERED, "정유진", "010-4444-5555", "인천 남동구", Decimal("60000"), ps2_2),
+        (OrderChannel.SMARTSTORE,  OrderStatus.DELIVERED, "최민석", "010-5555-6666", "대구 달서구", Decimal("32000"), ps2_1),
+    ]
+    for seq, (ch, st, rname, rphone, raddr, amount, prod) in enumerate(s2_orders, start=1):
+        o = Order(
+            order_number=f"FF-{today}-S2-{seq:04d}",
+            channel=ch, seller_id=seller2.id, status=st,
+            receiver_name=rname, receiver_phone=rphone, receiver_address=raddr,
+            total_amount=amount, created_at=now - timedelta(days=seq),
+        )
+        db.add(o)
+        db.flush()
+        db.add(OrderItem(order_id=o.id, product_id=prod.id, quantity=1, unit_price=amount))
+
+    # 3 orders for seller3
+    s3_orders = [
+        (OrderChannel.SMARTSTORE,  OrderStatus.RECEIVED,  "한주원", "010-6666-7777", "광주 북구",   Decimal("22000"), ps3_1),
+        (OrderChannel.CAFE24,      OrderStatus.PICKING,   "오세진", "010-7777-8888", "대전 유성구", Decimal("35000"), ps3_2),
+        (OrderChannel.OLIVEYOUNG,  OrderStatus.DELIVERED, "신민아", "010-8888-9999", "울산 중구",   Decimal("48000"), ps3_1),
+    ]
+    for seq, (ch, st, rname, rphone, raddr, amount, prod) in enumerate(s3_orders, start=1):
+        o = Order(
+            order_number=f"FF-{today}-S3-{seq:04d}",
+            channel=ch, seller_id=seller3.id, status=st,
+            receiver_name=rname, receiver_phone=rphone, receiver_address=raddr,
+            total_amount=amount, created_at=now - timedelta(days=seq + 2),
+        )
+        db.add(o)
+        db.flush()
+        db.add(OrderItem(order_id=o.id, product_id=prod.id, quantity=1, unit_price=amount))
+
+    db.commit()
+    print("✅ Seed extra sellers created.")
+
+
 def seed_promotions(db):
     if db.query(Promotion).count() > 0:
         return
@@ -321,6 +416,7 @@ def startup():
         seed_deliveries(db)
         seed_settlements(db)
         seed_returns(db)
+        seed_extra_sellers(db)
         seed_promotions(db)
         seed_notifications(db)
     finally:

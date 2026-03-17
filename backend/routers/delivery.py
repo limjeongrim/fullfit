@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 from backend.database import get_db
 from backend.models.user import User, UserRole
@@ -89,16 +89,15 @@ def _auto_advance_deliveries(db: Session) -> None:
 
 @router.get("/deliveries/", response_model=List[DeliveryResponse])
 def list_deliveries(
+    seller_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role([UserRole.ADMIN])),
 ):
     _auto_advance_deliveries(db)
-    rows = (
-        db.query(Delivery)
-        .options(joinedload(Delivery.order))
-        .order_by(Delivery.created_at.desc())
-        .all()
-    )
+    q = db.query(Delivery).join(Order).options(joinedload(Delivery.order))
+    if seller_id:
+        q = q.filter(Order.seller_id == seller_id)
+    rows = q.order_by(Delivery.created_at.desc()).all()
     return [_to_response(d) for d in rows]
 
 

@@ -45,6 +45,8 @@ export default function InventoryPage() {
   const [products, setProducts] = useState([])
   const [filter, setFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [filterSeller, setFilterSeller] = useState('')
+  const [sellers, setSellers] = useState([])
   const [alertCount, setAlertCount] = useState(0)
   const [showModal, setShowModal] = useState(false)
 
@@ -60,7 +62,9 @@ export default function InventoryPage() {
 
   const fetchInventory = async () => {
     try {
-      const res = await api.get('/inventory/')
+      const params = new URLSearchParams()
+      if (filterSeller) params.set('seller_id', filterSeller)
+      const res = await api.get(`/inventory/?${params}`)
       setInventory(res.data)
       setAlertCount(res.data.filter((r) => r.days_until_expiry <= 30).length)
     } catch (e) {
@@ -80,7 +84,10 @@ export default function InventoryPage() {
   useEffect(() => {
     fetchInventory()
     fetchProducts()
+    api.get('/sellers/').then(r => setSellers(r.data)).catch(() => {})
   }, [])
+
+  useEffect(() => { fetchInventory() }, [filterSeller])
 
   const handleLogout = () => {
     logout()
@@ -182,6 +189,16 @@ export default function InventoryPage() {
                 {label}
               </button>
             ))}
+            <select
+              value={filterSeller}
+              onChange={(e) => setFilterSeller(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              <option value="">전체 셀러</option>
+              {sellers.map((s) => (
+                <option key={s.id} value={s.id}>{s.full_name} ({s.company_name || s.email})</option>
+              ))}
+            </select>
             <input
               type="text"
               placeholder="상품명 또는 SKU 검색"

@@ -23,7 +23,6 @@ export default function InboundPage() {
       api.get('/inventory/'),
     ])
     setProducts(pRes.data)
-    // Sort by latest inbound_date desc, take first 10
     const sorted = [...iRes.data].sort((a, b) => {
       const da = a.inbound_date || ''
       const db_ = b.inbound_date || ''
@@ -65,35 +64,38 @@ export default function InboundPage() {
     }
   }
 
+  const INPUT_CLS = "w-full px-4 py-4 border-2 border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 bg-white"
+  const LABEL_CLS = "block text-base font-semibold text-gray-700 mb-2"
+
   return (
     <div className="min-h-screen bg-green-50">
-      <nav className="bg-green-700 text-white px-6 py-4 flex justify-between items-center shadow">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/worker/dashboard')} className="text-green-200 hover:text-white text-sm">← 대시보드</button>
+      <nav className="bg-green-700 text-white px-5 py-4 flex justify-between items-center shadow">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate('/worker/dashboard')} className="text-green-200 hover:text-white text-sm p-1">←</button>
           <span className="text-xl font-bold">입고 등록</span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <span className="hidden sm:inline text-sm text-green-100">{user?.email}</span>
-          <button onClick={handleLogout} className="bg-green-900 hover:bg-green-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">로그아웃</button>
+          <button onClick={handleLogout} className="bg-green-900 hover:bg-green-800 text-white text-sm px-4 py-2 rounded-lg transition-colors">로그아웃</button>
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        {/* Inbound form card */}
-        <div className="bg-white rounded-xl shadow-sm border border-green-100 p-7 mb-8">
-          <h3 className="text-base font-semibold text-gray-800 mb-5">입고 정보 입력</h3>
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        {/* Form card */}
+        <div className="bg-white rounded-2xl shadow-sm border-2 border-green-100 p-6 mb-6">
+          <h3 className="text-xl font-bold text-gray-800 mb-5">입고 정보 입력</h3>
 
           {formError && (
-            <div className="mb-5 rounded-xl px-4 py-3 text-sm font-medium border bg-red-50 border-red-200 text-red-600">
+            <div className="mb-5 rounded-xl px-4 py-4 text-base font-medium border-2 bg-red-50 border-red-200 text-red-600">
               ⚠️ {formError}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div className="sm:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">상품 선택 *</label>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className={LABEL_CLS}>상품 선택 *</label>
               <select name="product_id" value={form.product_id} onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+                className={INPUT_CLS} style={{ fontSize: '16px' }}>
                 <option value="">상품을 선택하세요</option>
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
@@ -102,70 +104,67 @@ export default function InboundPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">LOT번호 *</label>
+              <label className={LABEL_CLS}>LOT번호 *</label>
               <input type="text" name="lot_number" value={form.lot_number} onChange={handleChange}
                 placeholder="예: LOT-2026-001"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                inputMode="text"
+                className={INPUT_CLS} style={{ fontSize: '16px' }} />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">유통기한 *</label>
+              <label className={LABEL_CLS}>유통기한 *</label>
               <input type="date" name="expiry_date" value={form.expiry_date} onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                className={INPUT_CLS} style={{ fontSize: '16px' }} />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">수량 *</label>
+              <label className={LABEL_CLS}>수량 *</label>
               <input type="number" name="quantity" value={form.quantity} onChange={handleChange}
                 min={1} placeholder="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                inputMode="numeric"
+                className={INPUT_CLS} style={{ fontSize: '16px' }} />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">메모</label>
-              <textarea name="note" value={form.note} onChange={handleChange} rows={2}
-                placeholder="선택 입력"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none" />
+              <label className={LABEL_CLS}>메모 <span className="text-gray-400 font-normal text-sm">(선택)</span></label>
+              <textarea name="note" value={form.note} onChange={handleChange} rows={3}
+                placeholder="입고 메모를 입력하세요"
+                className={`${INPUT_CLS} resize-none`} style={{ fontSize: '16px' }} />
             </div>
 
-            <div className="sm:col-span-2 flex justify-end pt-1">
-              <button type="submit" disabled={submitting}
-                className="bg-green-700 hover:bg-green-800 text-white px-8 py-2.5 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50">
-                {submitting ? '등록 중...' : '입고 등록'}
-              </button>
-            </div>
+            <button type="submit" disabled={submitting}
+              className="w-full bg-green-700 hover:bg-green-800 active:bg-green-900 text-white py-5 rounded-xl text-lg font-bold transition-colors disabled:opacity-50 mt-2">
+              {submitting ? '등록 중...' : '📥 입고 등록'}
+            </button>
           </form>
         </div>
 
-        {/* Recent inbound history */}
-        <div className="bg-white rounded-xl shadow-sm border border-green-100 overflow-x-auto">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <h3 className="text-base font-semibold text-gray-800">최근 입고 이력 (최대 10건)</h3>
-          </div>
-          <table className="w-full text-sm">
-            <thead className="bg-green-700 text-white">
-              <tr>
-                {['상품명', 'LOT번호', '유통기한', '수량', '입고일'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {inventory.length === 0 ? (
-                <tr><td colSpan={5} className="text-center py-8 text-gray-400">입고 이력이 없습니다.</td></tr>
-              ) : (
-                inventory.map((inv) => (
-                  <tr key={inv.id} className="border-t border-gray-100 hover:bg-green-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-gray-800">{inv.product_name}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-600">{inv.lot_number}</td>
-                    <td className="px-4 py-3 text-gray-600">{inv.expiry_date}</td>
-                    <td className="px-4 py-3 text-gray-700">{inv.quantity.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">{inv.inbound_date || '—'}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        {/* Recent history — card layout */}
+        <div className="bg-white rounded-2xl shadow-sm border-2 border-green-100 p-5">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">최근 입고 이력 (최대 10건)</h3>
+          {inventory.length === 0 ? (
+            <p className="text-center py-6 text-gray-400">입고 이력이 없습니다.</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {inventory.map((inv) => (
+                <div key={inv.id}
+                  className="bg-green-50 rounded-xl p-4 border border-green-100">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-bold text-gray-800 text-base">{inv.product_name}</p>
+                      <p className="font-mono text-xs text-gray-500 mt-0.5">{inv.lot_number}</p>
+                    </div>
+                    <span className="text-base font-bold text-green-700">+{inv.quantity.toLocaleString()}개</span>
+                  </div>
+                  <div className="flex items-center gap-3 mt-2 text-sm text-gray-500">
+                    <span>유통기한: {inv.expiry_date}</span>
+                    <span className="text-gray-300">|</span>
+                    <span>입고일: {inv.inbound_date || '—'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

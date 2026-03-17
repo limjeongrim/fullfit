@@ -78,6 +78,8 @@ export default function AdminOrderPage() {
   const [total, setTotal] = useState(0)
   const [filterStatus, setFilterStatus] = useState('')
   const [filterChannel, setFilterChannel] = useState('')
+  const [filterSeller, setFilterSeller] = useState('')
+  const [sellers, setSellers] = useState([])
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
 
@@ -95,6 +97,7 @@ export default function AdminOrderPage() {
     const params = new URLSearchParams()
     if (filterStatus) params.set('status', filterStatus)
     if (filterChannel) params.set('channel', filterChannel)
+    if (filterSeller) params.set('seller_id', filterSeller)
     if (search) params.set('search', search)
     params.set('limit', '100')
     const res = await api.get(`/orders/?${params}`)
@@ -102,7 +105,11 @@ export default function AdminOrderPage() {
     setTotal(res.data.total)
   }
 
-  useEffect(() => { fetchOrders() }, [filterStatus, filterChannel, search])
+  useEffect(() => {
+    api.get('/sellers/').then(r => setSellers(r.data)).catch(() => {})
+  }, [])
+
+  useEffect(() => { fetchOrders() }, [filterStatus, filterChannel, filterSeller, search])
 
   const handleLogout = () => { logout(); navigate('/login') }
 
@@ -216,6 +223,17 @@ export default function AdminOrderPage() {
               <option value="">전체 채널</option>
               {ALL_CHANNELS.map((c) => (
                 <option key={c} value={c}>{CHANNEL_META[c].label}</option>
+              ))}
+            </select>
+
+            <select
+              value={filterSeller}
+              onChange={(e) => setFilterSeller(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              <option value="">전체 셀러</option>
+              {sellers.map((s) => (
+                <option key={s.id} value={s.id}>{s.full_name} ({s.company_name || s.email})</option>
               ))}
             </select>
 

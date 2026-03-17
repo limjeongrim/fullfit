@@ -1,5 +1,6 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models.return_request import ReturnRequest, ReturnStatus
@@ -31,10 +32,14 @@ def _to_response(r: ReturnRequest) -> ReturnResponse:
 
 @router.get("/", response_model=list[ReturnResponse])
 def list_all_returns(
+    seller_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user=Depends(require_role([UserRole.ADMIN])),
 ):
-    returns = db.query(ReturnRequest).order_by(ReturnRequest.created_at.desc()).all()
+    q = db.query(ReturnRequest)
+    if seller_id:
+        q = q.filter(ReturnRequest.seller_id == seller_id)
+    returns = q.order_by(ReturnRequest.created_at.desc()).all()
     return [_to_response(r) for r in returns]
 
 

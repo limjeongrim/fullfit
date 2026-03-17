@@ -18,5 +18,8 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(Enum(UserRole), nullable=False)
     full_name = Column(String, nullable=False)
+    company_name = Column(String, nullable=True)
+    business_number = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    joined_at = Column(DateTime, default=datetime.utcnow)
