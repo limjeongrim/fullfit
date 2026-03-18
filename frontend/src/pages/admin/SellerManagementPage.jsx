@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import useAuthStore from '../../store/authStore'
 import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
+import SidebarLayout from '../../components/Layout/SidebarLayout'
 
 const EMPTY_FORM = { email: '', password: '', full_name: '', company_name: '', business_number: '' }
 
@@ -13,7 +12,6 @@ function timeAgo(dateStr) {
 
 function SummaryModal({ seller, onClose }) {
   const [detail, setDetail] = useState(null)
-  const navigate = useNavigate()
 
   useEffect(() => {
     api.get(`/sellers/${seller.id}/summary`).then(r => setDetail(r.data)).catch(() => {})
@@ -131,9 +129,7 @@ function SummaryModal({ seller, onClose }) {
 }
 
 export default function SellerManagementPage() {
-  const { user, logout } = useAuthStore()
   const { addToast } = useToastStore()
-  const navigate = useNavigate()
 
   const [sellers, setSellers] = useState([])
   const [showCreate, setShowCreate] = useState(false)
@@ -146,8 +142,6 @@ export default function SellerManagementPage() {
   }
 
   useEffect(() => { fetchSellers() }, [])
-
-  const handleLogout = () => { logout(); navigate('/login') }
 
   const handleToggleActive = async (s) => {
     try {
@@ -183,138 +177,129 @@ export default function SellerManagementPage() {
   const newThisMonth = sellers.filter(s => s.joined_at?.slice(0, 7) === thisMonth).length
 
   return (
-    <div className="min-h-screen bg-blue-50">
-      <nav className="bg-blue-700 text-white px-6 py-4 flex justify-between items-center shadow">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/admin/dashboard')} className="text-blue-200 hover:text-white text-sm">← 대시보드</button>
-          <span className="text-xl font-bold">셀러 관리</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="hidden sm:inline text-sm text-blue-100">{user?.email}</span>
-          <button onClick={handleLogout} className="bg-blue-900 hover:bg-blue-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">로그아웃</button>
-        </div>
-      </nav>
+    <SidebarLayout>
+      <div className="min-h-screen bg-blue-50">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="flex items-center justify-between mb-7">
+            <div>
+              <h2 className="text-2xl font-bold text-blue-900">셀러 관리</h2>
+              <p className="text-blue-600 mt-1 text-sm">등록된 셀러 계정 관리 및 현황 조회</p>
+            </div>
+            <button onClick={() => setShowCreate(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+              + 셀러 등록
+            </button>
+          </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex items-center justify-between mb-7">
-          <div>
-            <h2 className="text-2xl font-bold text-blue-900">셀러 관리</h2>
-            <p className="text-blue-600 mt-1 text-sm">등록된 셀러 계정 관리 및 현황 조회</p>
+          {/* Summary cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
+            <div className="bg-white rounded-xl border border-blue-100 p-5">
+              <p className="text-sm text-gray-500 mb-1">전체 셀러</p>
+              <p className="text-4xl font-bold text-blue-700">{sellers.length}</p>
+            </div>
+            <div className="bg-green-50 rounded-xl border border-green-200 p-5">
+              <p className="text-sm text-green-600 mb-1">활성 셀러</p>
+              <p className="text-4xl font-bold text-green-700">{activeSellers}</p>
+            </div>
+            <div className="bg-purple-50 rounded-xl border border-purple-200 p-5">
+              <p className="text-sm text-purple-600 mb-1">이번달 신규</p>
+              <p className="text-4xl font-bold text-purple-700">{newThisMonth}</p>
+            </div>
           </div>
-          <button onClick={() => setShowCreate(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-            + 셀러 등록
-          </button>
+
+          {/* Seller table */}
+          <div className="bg-white rounded-xl shadow-sm border border-blue-100 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-blue-700 text-white">
+                <tr>
+                  {['셀러명', '업체명', '이메일', '상품 수', '총 주문', '총 재고', '가입일', '상태', '액션'].map(h => (
+                    <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sellers.length === 0 ? (
+                  <tr><td colSpan={9} className="text-center py-10 text-gray-400">셀러가 없습니다.</td></tr>
+                ) : (
+                  sellers.map(s => (
+                    <tr key={s.id}
+                      onClick={() => setSummaryTarget(s)}
+                      className="border-t border-gray-100 hover:bg-blue-50 transition-colors cursor-pointer">
+                      <td className="px-4 py-3 font-semibold text-gray-800">{s.full_name}</td>
+                      <td className="px-4 py-3 text-gray-600">{s.company_name || '—'}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{s.email}</td>
+                      <td className="px-4 py-3 text-center font-medium">{s.total_products}</td>
+                      <td className="px-4 py-3 text-center font-medium">{s.total_orders}</td>
+                      <td className="px-4 py-3 text-center font-medium">{s.total_inventory.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{timeAgo(s.joined_at)}</td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {s.is_active ? '활성' : '비활성'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => handleToggleActive(s)}
+                          className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors ${
+                            s.is_active
+                              ? 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+                              : 'bg-green-100 hover:bg-green-200 text-green-700'
+                          }`}>
+                          {s.is_active ? '비활성화' : '활성화'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">행 클릭 시 셀러 상세 보기</p>
         </div>
 
-        {/* Summary cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
-          <div className="bg-white rounded-xl border border-blue-100 p-5">
-            <p className="text-sm text-gray-500 mb-1">전체 셀러</p>
-            <p className="text-4xl font-bold text-blue-700">{sellers.length}</p>
-          </div>
-          <div className="bg-green-50 rounded-xl border border-green-200 p-5">
-            <p className="text-sm text-green-600 mb-1">활성 셀러</p>
-            <p className="text-4xl font-bold text-green-700">{activeSellers}</p>
-          </div>
-          <div className="bg-purple-50 rounded-xl border border-purple-200 p-5">
-            <p className="text-sm text-purple-600 mb-1">이번달 신규</p>
-            <p className="text-4xl font-bold text-purple-700">{newThisMonth}</p>
-          </div>
-        </div>
-
-        {/* Seller table */}
-        <div className="bg-white rounded-xl shadow-sm border border-blue-100 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-blue-700 text-white">
-              <tr>
-                {['셀러명', '업체명', '이메일', '상품 수', '총 주문', '총 재고', '가입일', '상태', '액션'].map(h => (
-                  <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
+        {/* Register modal */}
+        {showCreate && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+              <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="font-bold text-lg text-gray-800">셀러 등록</h3>
+                <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+              </div>
+              <div className="px-6 py-5 space-y-4">
+                {[
+                  { key: 'email', label: '이메일 *', type: 'email', placeholder: 'seller@example.com' },
+                  { key: 'password', label: '비밀번호 *', type: 'password', placeholder: '••••••••' },
+                  { key: 'full_name', label: '이름 *', type: 'text', placeholder: '홍길동' },
+                  { key: 'company_name', label: '업체명', type: 'text', placeholder: '길동뷰티' },
+                  { key: 'business_number', label: '사업자번호', type: 'text', placeholder: '000-00-00000' },
+                ].map(f => (
+                  <div key={f.key}>
+                    <label className="text-xs font-semibold text-gray-600 mb-1 block">{f.label}</label>
+                    <input
+                      type={f.type}
+                      value={form[f.key]}
+                      onChange={e => setForm(v => ({ ...v, [f.key]: e.target.value }))}
+                      placeholder={f.placeholder}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  </div>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sellers.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-10 text-gray-400">셀러가 없습니다.</td></tr>
-              ) : (
-                sellers.map(s => (
-                  <tr key={s.id}
-                    onClick={() => setSummaryTarget(s)}
-                    className="border-t border-gray-100 hover:bg-blue-50 transition-colors cursor-pointer">
-                    <td className="px-4 py-3 font-semibold text-gray-800">{s.full_name}</td>
-                    <td className="px-4 py-3 text-gray-600">{s.company_name || '—'}</td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">{s.email}</td>
-                    <td className="px-4 py-3 text-center font-medium">{s.total_products}</td>
-                    <td className="px-4 py-3 text-center font-medium">{s.total_orders}</td>
-                    <td className="px-4 py-3 text-center font-medium">{s.total_inventory.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{timeAgo(s.joined_at)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {s.is_active ? '활성' : '비활성'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={() => handleToggleActive(s)}
-                        className={`text-xs px-3 py-1 rounded-lg font-medium transition-colors ${
-                          s.is_active
-                            ? 'bg-gray-100 hover:bg-gray-200 text-gray-600'
-                            : 'bg-green-100 hover:bg-green-200 text-green-700'
-                        }`}>
-                        {s.is_active ? '비활성화' : '활성화'}
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-xs text-gray-400 mt-2">행 클릭 시 셀러 상세 보기</p>
-      </div>
-
-      {/* Register modal */}
-      {showCreate && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-              <h3 className="font-bold text-lg text-gray-800">셀러 등록</h3>
-              <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              {[
-                { key: 'email', label: '이메일 *', type: 'email', placeholder: 'seller@example.com' },
-                { key: 'password', label: '비밀번호 *', type: 'password', placeholder: '••••••••' },
-                { key: 'full_name', label: '이름 *', type: 'text', placeholder: '홍길동' },
-                { key: 'company_name', label: '업체명', type: 'text', placeholder: '길동뷰티' },
-                { key: 'business_number', label: '사업자번호', type: 'text', placeholder: '000-00-00000' },
-              ].map(f => (
-                <div key={f.key}>
-                  <label className="text-xs font-semibold text-gray-600 mb-1 block">{f.label}</label>
-                  <input
-                    type={f.type}
-                    value={form[f.key]}
-                    onChange={e => setForm(v => ({ ...v, [f.key]: e.target.value }))}
-                    placeholder={f.placeholder}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-                </div>
-              ))}
-            </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end">
-              <button onClick={() => setShowCreate(false)}
-                className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">취소</button>
-              <button onClick={handleCreate} disabled={saving}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-50">
-                {saving ? '등록 중...' : '등록'}
-              </button>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-100 flex gap-3 justify-end">
+                <button onClick={() => setShowCreate(false)}
+                  className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">취소</button>
+                <button onClick={handleCreate} disabled={saving}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-50">
+                  {saving ? '등록 중...' : '등록'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {summaryTarget && (
-        <SummaryModal seller={summaryTarget} onClose={() => setSummaryTarget(null)} />
-      )}
-    </div>
+        {summaryTarget && (
+          <SummaryModal seller={summaryTarget} onClose={() => setSummaryTarget(null)} />
+        )}
+      </div>
+    </SidebarLayout>
   )
 }

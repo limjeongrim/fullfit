@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import useAuthStore from '../../store/authStore'
 import api from '../../api/axiosInstance'
+import SidebarLayout from '../../components/Layout/SidebarLayout'
 
 const STATUS_META = {
   RECEIVED:  { label: '접수',    cls: 'bg-blue-100 text-blue-700' },
@@ -46,9 +45,6 @@ function StatCard({ label, value, color }) {
 }
 
 export default function SellerOrderPage() {
-  const { user, logout } = useAuthStore()
-  const navigate = useNavigate()
-
   const [orders, setOrders] = useState([])
   const [total, setTotal] = useState(0)
   const [filterStatus, setFilterStatus] = useState('')
@@ -68,8 +64,6 @@ export default function SellerOrderPage() {
 
   useEffect(() => { fetchOrders() }, [filterStatus, filterChannel, search])
 
-  const handleLogout = () => { logout(); navigate('/login') }
-
   const count = (s) => orders.filter((o) => o.status === s).length
   const stats = [
     { label: '전체 주문', value: total, color: 'purple' },
@@ -79,93 +73,83 @@ export default function SellerOrderPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-purple-50">
-      {/* Navbar */}
-      <nav className="bg-purple-700 text-white px-6 py-4 flex justify-between items-center shadow">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/seller/dashboard')} className="text-purple-200 hover:text-white text-sm">← 대시보드</button>
-          <span className="text-xl font-bold">주문 현황</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-purple-100">{user?.email}</span>
-          <button onClick={handleLogout} className="bg-purple-900 hover:bg-purple-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">로그아웃</button>
-        </div>
-      </nav>
+    <SidebarLayout>
+      <div className="min-h-screen bg-purple-50">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          {/* Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-7">
+            {stats.map((s) => <StatCard key={s.label} {...s} />)}
+          </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-7">
-          {stats.map((s) => <StatCard key={s.label} {...s} />)}
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-2 mb-5">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+            >
+              <option value="">전체 상태</option>
+              {Object.keys(STATUS_META).map((s) => (
+                <option key={s} value={s}>{STATUS_META[s].label}</option>
+              ))}
+            </select>
+
+            <select
+              value={filterChannel}
+              onChange={(e) => setFilterChannel(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
+            >
+              <option value="">전체 채널</option>
+              {Object.keys(CHANNEL_META).map((c) => (
+                <option key={c} value={c}>{CHANNEL_META[c].label}</option>
+              ))}
+            </select>
+
+            <input
+              type="text"
+              placeholder="주문번호 또는 수신자 검색"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-56"
+            />
+          </div>
+
+          {/* Table */}
+          <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-purple-100">
+            <table className="w-full text-sm">
+              <thead className="bg-purple-700 text-white">
+                <tr>
+                  {['주문번호', '채널', '수신자', '주소', '금액', '상태', '주문일시'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {orders.length === 0 ? (
+                  <tr><td colSpan={7} className="text-center py-10 text-gray-400">주문이 없습니다.</td></tr>
+                ) : (
+                  orders.map((o) => (
+                    <tr key={o.id} className="border-t border-gray-100 hover:bg-purple-50 transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">{o.order_number}</td>
+                      <td className="px-4 py-3"><ChannelBadge channel={o.channel} /></td>
+                      <td className="px-4 py-3 font-medium text-gray-800">{o.receiver_name}</td>
+                      <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate">{o.receiver_address}</td>
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
+                        ₩{Number(o.total_amount).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
+                      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                        {new Date(o.created_at).toLocaleString('ko-KR')}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">총 {total}건</p>
         </div>
-
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-2 mb-5">
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
-          >
-            <option value="">전체 상태</option>
-            {Object.keys(STATUS_META).map((s) => (
-              <option key={s} value={s}>{STATUS_META[s].label}</option>
-            ))}
-          </select>
-
-          <select
-            value={filterChannel}
-            onChange={(e) => setFilterChannel(e.target.value)}
-            className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"
-          >
-            <option value="">전체 채널</option>
-            {Object.keys(CHANNEL_META).map((c) => (
-              <option key={c} value={c}>{CHANNEL_META[c].label}</option>
-            ))}
-          </select>
-
-          <input
-            type="text"
-            placeholder="주문번호 또는 수신자 검색"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-56"
-          />
-        </div>
-
-        {/* Table */}
-        <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-purple-100">
-          <table className="w-full text-sm">
-            <thead className="bg-purple-700 text-white">
-              <tr>
-                {['주문번호', '채널', '수신자', '주소', '금액', '상태', '주문일시'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {orders.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-10 text-gray-400">주문이 없습니다.</td></tr>
-              ) : (
-                orders.map((o) => (
-                  <tr key={o.id} className="border-t border-gray-100 hover:bg-purple-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">{o.order_number}</td>
-                    <td className="px-4 py-3"><ChannelBadge channel={o.channel} /></td>
-                    <td className="px-4 py-3 font-medium text-gray-800">{o.receiver_name}</td>
-                    <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate">{o.receiver_address}</td>
-                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
-                      ₩{Number(o.total_amount).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
-                    <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                      {new Date(o.created_at).toLocaleString('ko-KR')}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-xs text-gray-400 mt-2">총 {total}건</p>
       </div>
-    </div>
+    </SidebarLayout>
   )
 }

@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import useAuthStore from '../../store/authStore'
 import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
-
-// ── Static maps ───────────────────────────────────────────────────────────────
+import SidebarLayout from '../../components/Layout/SidebarLayout'
 
 const STATUS_META = {
   RECEIVED:  { label: '접수',    cls: 'bg-blue-100 text-blue-700' },
@@ -35,28 +32,22 @@ const NEXT_STATUSES = {
 const ALL_STATUSES = Object.keys(STATUS_META)
 const ALL_CHANNELS = Object.keys(CHANNEL_META)
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
 function StatusBadge({ status }) {
   const m = STATUS_META[status] || {}
-  return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${m.cls}`}>{m.label}</span>
-  )
+  return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${m.cls}`}>{m.label}</span>
 }
 
 function ChannelBadge({ channel }) {
   const m = CHANNEL_META[channel] || {}
-  return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${m.cls}`}>{m.label}</span>
-  )
+  return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${m.cls}`}>{m.label}</span>
 }
 
 function StatCard({ label, value, color }) {
   const colorMap = {
-    blue: 'bg-blue-50 border-blue-200 text-blue-700',
+    blue:   'bg-blue-50 border-blue-200 text-blue-700',
     yellow: 'bg-yellow-50 border-yellow-200 text-yellow-700',
     purple: 'bg-purple-50 border-purple-200 text-purple-700',
-    green: 'bg-green-50 border-green-200 text-green-700',
+    green:  'bg-green-50 border-green-200 text-green-700',
   }
   return (
     <div className={`rounded-xl border p-4 ${colorMap[color]}`}>
@@ -66,11 +57,7 @@ function StatCard({ label, value, color }) {
   )
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
 export default function AdminOrderPage() {
-  const { user, logout } = useAuthStore()
-  const navigate = useNavigate()
   const addToast = useToastStore((s) => s.addToast)
   const fileRef = useRef()
 
@@ -83,7 +70,6 @@ export default function AdminOrderPage() {
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
 
-  // Form state
   const [form, setForm] = useState({
     channel: 'SMARTSTORE', receiver_name: '', receiver_phone: '',
     receiver_address: '', total_amount: '', note: '',
@@ -111,9 +97,6 @@ export default function AdminOrderPage() {
 
   useEffect(() => { fetchOrders() }, [filterStatus, filterChannel, filterSeller, search])
 
-  const handleLogout = () => { logout(); navigate('/login') }
-
-  // Stats
   const count = (s) => orders.filter((o) => o.status === s).length
   const stats = [
     { label: '전체 주문', value: total, color: 'blue' },
@@ -122,7 +105,6 @@ export default function AdminOrderPage() {
     { label: '배송중', value: count('SHIPPED'), color: 'purple' },
   ]
 
-  // Status change
   const handleStatusChange = async (orderId, newStatus) => {
     try {
       await api.patch(`/orders/${orderId}/status`, { status: newStatus })
@@ -133,7 +115,6 @@ export default function AdminOrderPage() {
     }
   }
 
-  // Manual order submit
   const handleFormChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
 
   const handleOrderSubmit = async (e) => {
@@ -165,7 +146,6 @@ export default function AdminOrderPage() {
     }
   }
 
-  // CSV upload
   const handleCsvUpload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
@@ -182,195 +162,151 @@ export default function AdminOrderPage() {
   }
 
   return (
-    <div className="min-h-screen bg-blue-50">
-      {/* Navbar */}
-      <nav className="bg-blue-700 text-white px-6 py-4 flex justify-between items-center shadow">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/admin/dashboard')} className="text-blue-200 hover:text-white text-sm">← 대시보드</button>
-          <span className="text-xl font-bold">주문 관리</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="hidden sm:inline text-sm text-blue-100">{user?.email}</span>
-          <button onClick={handleLogout} className="bg-blue-900 hover:bg-blue-800 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">로그아웃</button>
-        </div>
-      </nav>
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-7">
-          {stats.map((s) => <StatCard key={s.label} {...s} />)}
-        </div>
-
-        {/* Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-            >
-              <option value="">전체 상태</option>
-              {ALL_STATUSES.map((s) => (
-                <option key={s} value={s}>{STATUS_META[s].label}</option>
-              ))}
-            </select>
-
-            <select
-              value={filterChannel}
-              onChange={(e) => setFilterChannel(e.target.value)}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-            >
-              <option value="">전체 채널</option>
-              {ALL_CHANNELS.map((c) => (
-                <option key={c} value={c}>{CHANNEL_META[c].label}</option>
-              ))}
-            </select>
-
-            <select
-              value={filterSeller}
-              onChange={(e) => setFilterSeller(e.target.value)}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-            >
-              <option value="">전체 셀러</option>
-              {sellers.map((s) => (
-                <option key={s.id} value={s.id}>{s.full_name} ({s.company_name || s.email})</option>
-              ))}
-            </select>
-
-            <input
-              type="text"
-              placeholder="주문번호 또는 수신자 검색"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-56"
-            />
+    <SidebarLayout>
+      <div className="min-h-screen bg-blue-50">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          {/* Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-7">
+            {stats.map((s) => <StatCard key={s.label} {...s} />)}
           </div>
 
-          <div className="flex items-center gap-2">
-            <input ref={fileRef} type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" />
-            <button
-              onClick={() => fileRef.current.click()}
-              className="bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              CSV 업로드
-            </button>
-            <button
-              onClick={() => setShowModal(true)}
-              className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors"
-            >
-              + 수동 주문 등록
-            </button>
+          {/* Controls */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                <option value="">전체 상태</option>
+                {ALL_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
+              </select>
+              <select value={filterChannel} onChange={(e) => setFilterChannel(e.target.value)}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                <option value="">전체 채널</option>
+                {ALL_CHANNELS.map((c) => <option key={c} value={c}>{CHANNEL_META[c].label}</option>)}
+              </select>
+              <select value={filterSeller} onChange={(e) => setFilterSeller(e.target.value)}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                <option value="">전체 셀러</option>
+                {sellers.map((s) => <option key={s.id} value={s.id}>{s.full_name} ({s.company_name || s.email})</option>)}
+              </select>
+              <input type="text" placeholder="주문번호 또는 수신자 검색" value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-56" />
+            </div>
+            <div className="flex items-center gap-2">
+              <input ref={fileRef} type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" />
+              <button onClick={() => fileRef.current.click()}
+                className="bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                CSV 업로드
+              </button>
+              <button onClick={() => setShowModal(true)}
+                className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors">
+                + 수동 주문 등록
+              </button>
+            </div>
           </div>
+
+          {/* Table */}
+          <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-blue-100">
+            <table className="w-full text-sm">
+              <thead className="bg-blue-700 text-white">
+                <tr>
+                  {['주문번호', '채널', '수신자', '주소', '금액', '상태', '주문일시', '액션'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {orders.length === 0 ? (
+                  <tr><td colSpan={8} className="text-center py-10 text-gray-400">주문이 없습니다.</td></tr>
+                ) : (
+                  orders.map((o) => (
+                    <tr key={o.id} className="border-t border-gray-100 hover:bg-blue-50 transition-colors">
+                      <td className="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">{o.order_number}</td>
+                      <td className="px-4 py-3"><ChannelBadge channel={o.channel} /></td>
+                      <td className="px-4 py-3 font-medium text-gray-800">{o.receiver_name}</td>
+                      <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate">{o.receiver_address}</td>
+                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">₩{Number(o.total_amount).toLocaleString()}</td>
+                      <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
+                      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                        {new Date(o.created_at).toLocaleString('ko-KR')}
+                      </td>
+                      <td className="px-4 py-3">
+                        {NEXT_STATUSES[o.status]?.length > 0 ? (
+                          <select defaultValue=""
+                            onChange={(e) => { if (e.target.value) handleStatusChange(o.id, e.target.value); e.target.value = '' }}
+                            className="px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-300">
+                            <option value="">상태변경</option>
+                            {NEXT_STATUSES[o.status].map((s) => (
+                              <option key={s} value={s}>{STATUS_META[s].label}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">총 {total}건</p>
         </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-blue-100">
-          <table className="w-full text-sm">
-            <thead className="bg-blue-700 text-white">
-              <tr>
-                {['주문번호', '채널', '수신자', '주소', '금액', '상태', '주문일시', '액션'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {orders.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-10 text-gray-400">주문이 없습니다.</td></tr>
-              ) : (
-                orders.map((o) => (
-                  <tr key={o.id} className="border-t border-gray-100 hover:bg-blue-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">{o.order_number}</td>
-                    <td className="px-4 py-3"><ChannelBadge channel={o.channel} /></td>
-                    <td className="px-4 py-3 font-medium text-gray-800">{o.receiver_name}</td>
-                    <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate">{o.receiver_address}</td>
-                    <td className="px-4 py-3 text-gray-700 whitespace-nowrap">
-                      ₩{Number(o.total_amount).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
-                    <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                      {new Date(o.created_at).toLocaleString('ko-KR')}
-                    </td>
-                    <td className="px-4 py-3">
-                      {NEXT_STATUSES[o.status]?.length > 0 ? (
-                        <select
-                          defaultValue=""
-                          onChange={(e) => {
-                            if (e.target.value) handleStatusChange(o.id, e.target.value)
-                            e.target.value = ''
-                          }}
-                          className="px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-300"
-                        >
-                          <option value="">상태변경</option>
-                          {NEXT_STATUSES[o.status].map((s) => (
-                            <option key={s} value={s}>{STATUS_META[s].label}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className="text-gray-300 text-xs">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-xs text-gray-400 mt-2">총 {total}건</p>
+        {/* Manual order modal */}
+        {showModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8">
+              <h3 className="text-lg font-bold text-gray-800 mb-6">수동 주문 등록</h3>
+              <form onSubmit={handleOrderSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">채널 *</label>
+                  <select name="channel" value={form.channel} onChange={handleFormChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    {ALL_CHANNELS.map((c) => <option key={c} value={c}>{CHANNEL_META[c].label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">수신자명 *</label>
+                  <input type="text" name="receiver_name" value={form.receiver_name} onChange={handleFormChange}
+                    placeholder="홍길동" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">연락처 *</label>
+                  <input type="text" name="receiver_phone" value={form.receiver_phone} onChange={handleFormChange}
+                    placeholder="010-0000-0000" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">주소 *</label>
+                  <input type="text" name="receiver_address" value={form.receiver_address} onChange={handleFormChange}
+                    placeholder="서울시 강남구..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">금액 *</label>
+                  <input type="number" name="total_amount" value={form.total_amount} onChange={handleFormChange}
+                    placeholder="0" min={0} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">메모</label>
+                  <textarea name="note" value={form.note} onChange={handleFormChange} rows={2}
+                    placeholder="선택 입력" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
+                </div>
+                {formError && (
+                  <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-2">{formError}</div>
+                )}
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => { setShowModal(false); setFormError('') }}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">취소</button>
+                  <button type="submit" disabled={submitting}
+                    className="flex-1 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50">
+                    {submitting ? '등록 중...' : '주문 등록'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
-
-      {/* Manual order modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8">
-            <h3 className="text-lg font-bold text-gray-800 mb-6">수동 주문 등록</h3>
-            <form onSubmit={handleOrderSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">채널 *</label>
-                <select name="channel" value={form.channel} onChange={handleFormChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-                  {ALL_CHANNELS.map((c) => <option key={c} value={c}>{CHANNEL_META[c].label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">수신자명 *</label>
-                <input type="text" name="receiver_name" value={form.receiver_name} onChange={handleFormChange}
-                  placeholder="홍길동" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">연락처 *</label>
-                <input type="text" name="receiver_phone" value={form.receiver_phone} onChange={handleFormChange}
-                  placeholder="010-0000-0000" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">주소 *</label>
-                <input type="text" name="receiver_address" value={form.receiver_address} onChange={handleFormChange}
-                  placeholder="서울시 강남구..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">금액 *</label>
-                <input type="number" name="total_amount" value={form.total_amount} onChange={handleFormChange}
-                  placeholder="0" min={0} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">메모</label>
-                <textarea name="note" value={form.note} onChange={handleFormChange} rows={2}
-                  placeholder="선택 입력" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
-              </div>
-              {formError && (
-                <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-2">{formError}</div>
-              )}
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => { setShowModal(false); setFormError('') }}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">취소</button>
-                <button type="submit" disabled={submitting}
-                  className="flex-1 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50">
-                  {submitting ? '등록 중...' : '주문 등록'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+    </SidebarLayout>
   )
 }

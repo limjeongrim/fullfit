@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import useAuthStore from '../../store/authStore'
 import api from '../../api/axiosInstance'
 import DeliveryMap from '../../components/DeliveryMap'
+import SidebarLayout from '../../components/Layout/SidebarLayout'
 
 const STATUS_META = {
   READY:            { label: '준비',    cls: 'bg-gray-100 text-gray-600' },
@@ -20,8 +19,6 @@ const FILTER_OPTIONS = [
 ]
 
 export default function DeliveryMapPage() {
-  const { user, logout } = useAuthStore()
-  const navigate = useNavigate()
   const [deliveries, setDeliveries] = useState([])
   const [filterStatus, setFilterStatus] = useState('')
   const [flyToId, setFlyToId] = useState(null)
@@ -30,88 +27,65 @@ export default function DeliveryMapPage() {
     api.get('/deliveries/').then((r) => setDeliveries(r.data)).catch(console.error)
   }, [])
 
-  const handleLogout = () => { logout(); navigate('/login') }
-
-  const filtered = filterStatus
-    ? deliveries.filter((d) => d.status === filterStatus)
-    : deliveries
-
+  const filtered = filterStatus ? deliveries.filter((d) => d.status === filterStatus) : deliveries
   const countStatus = (s) => deliveries.filter((d) => d.status === s).length
 
   return (
-    <div className="min-h-screen bg-blue-50 flex flex-col">
-      {/* Navbar */}
-      <nav className="bg-blue-700 text-white px-6 py-4 flex justify-between items-center shadow shrink-0">
-        <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/admin/deliveries')} className="text-blue-200 hover:text-white text-sm">← 배송 관리</button>
-          <span className="text-xl font-bold">배송 지도</span>
+    <SidebarLayout>
+      {/* Full-height layout: fills viewport minus 56px navbar */}
+      <div className="h-[calc(100vh-56px)] bg-blue-50 flex flex-col">
+        {/* Stats bar */}
+        <div className="bg-white border-b border-blue-100 px-6 py-3 flex flex-wrap gap-4 shrink-0">
+          <span className="text-sm font-medium text-gray-700">전체 {deliveries.length}건</span>
+          <span className="text-sm font-medium text-blue-700">배송중 {countStatus('IN_TRANSIT')}건</span>
+          <span className="text-sm font-medium text-orange-600">배달중 {countStatus('OUT_FOR_DELIVERY')}건</span>
+          <span className="text-sm font-medium text-green-600">배송완료 {countStatus('DELIVERED')}건</span>
         </div>
-        <div className="flex items-center gap-4">
-          <span className="hidden sm:inline text-sm text-blue-100">{user?.email}</span>
-          <button onClick={handleLogout} className="bg-blue-900 hover:bg-blue-800 text-white text-sm px-4 py-1.5 rounded-lg">로그아웃</button>
-        </div>
-      </nav>
 
-      {/* Stats bar */}
-      <div className="bg-white border-b border-blue-100 px-6 py-3 flex flex-wrap gap-4 shrink-0">
-        <span className="text-sm font-medium text-gray-700">전체 {deliveries.length}건</span>
-        <span className="text-sm font-medium text-blue-700">배송중 {countStatus('IN_TRANSIT')}건</span>
-        <span className="text-sm font-medium text-orange-600">배달중 {countStatus('OUT_FOR_DELIVERY')}건</span>
-        <span className="text-sm font-medium text-green-600">배송완료 {countStatus('DELIVERED')}건</span>
-      </div>
+        <div className="flex flex-1 overflow-hidden">
+          {/* Sidebar — delivery list */}
+          <div className="w-[300px] shrink-0 bg-white border-r border-blue-100 flex flex-col overflow-hidden">
+            {/* Filter buttons */}
+            <div className="p-3 border-b border-gray-100 flex gap-1 flex-wrap">
+              {FILTER_OPTIONS.map(({ key, label }) => (
+                <button key={key} onClick={() => setFilterStatus(key)}
+                  className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                    filterStatus === key ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <div className="w-[300px] shrink-0 bg-white border-r border-blue-100 flex flex-col overflow-hidden">
-          {/* Filter buttons */}
-          <div className="p-3 border-b border-gray-100 flex gap-1 flex-wrap">
-            {FILTER_OPTIONS.map(({ key, label }) => (
-              <button key={key}
-                onClick={() => setFilterStatus(key)}
-                className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${
-                  filterStatus === key ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+            {/* Delivery list */}
+            <div className="flex-1 overflow-y-auto">
+              {filtered.length === 0 ? (
+                <div className="text-center text-gray-400 text-sm py-10">배송 없음</div>
+              ) : (
+                filtered.map((d) => {
+                  const meta = STATUS_META[d.status] || {}
+                  return (
+                    <button key={d.id} onClick={() => setFlyToId(d.id)}
+                      className="w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-blue-50 transition-colors">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-mono text-gray-700 font-semibold">{d.order_number}</span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${meta.cls}`}>{meta.label}</span>
+                      </div>
+                      <p className="text-xs text-gray-600 font-medium">{d.receiver_name}</p>
+                      <p className="text-[11px] text-gray-400 truncate">{d.receiver_address}</p>
+                    </button>
+                  )
+                })
+              )}
+            </div>
           </div>
 
-          {/* Delivery list */}
-          <div className="flex-1 overflow-y-auto">
-            {filtered.length === 0 ? (
-              <div className="text-center text-gray-400 text-sm py-10">배송 없음</div>
-            ) : (
-              filtered.map((d) => {
-                const meta = STATUS_META[d.status] || {}
-                return (
-                  <button
-                    key={d.id}
-                    onClick={() => setFlyToId(d.id)}
-                    className="w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-blue-50 transition-colors"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-mono text-gray-700 font-semibold">{d.order_number}</span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${meta.cls}`}>{meta.label}</span>
-                    </div>
-                    <p className="text-xs text-gray-600 font-medium">{d.receiver_name}</p>
-                    <p className="text-[11px] text-gray-400 truncate">{d.receiver_address}</p>
-                  </button>
-                )
-              })
-            )}
+          {/* Map */}
+          <div className="flex-1 p-4">
+            <DeliveryMap deliveries={filtered} height="100%" flyToId={flyToId} />
           </div>
         </div>
-
-        {/* Map */}
-        <div className="flex-1 p-4">
-          <DeliveryMap
-            deliveries={filtered}
-            height="100%"
-            flyToId={flyToId}
-          />
-        </div>
       </div>
-    </div>
+    </SidebarLayout>
   )
 }
