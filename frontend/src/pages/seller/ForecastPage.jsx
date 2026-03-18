@@ -7,9 +7,9 @@ import api from '../../api/axiosInstance'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
 
 const RISK_META = {
-  HIGH:   { label: '위험', cls: 'bg-red-100 text-red-700 font-bold' },
-  MEDIUM: { label: '주의', cls: 'bg-yellow-100 text-yellow-700 font-semibold' },
-  LOW:    { label: '안전', cls: 'bg-green-100 text-green-700' },
+  HIGH:   { label: '위험', cls: 'bg-[#FEE2E2] text-[#991B1B] font-bold' },
+  MEDIUM: { label: '주의', cls: 'bg-[#FEF9C3] text-[#854D0E] font-semibold' },
+  LOW:    { label: '안전', cls: 'bg-[#DCFCE7] text-[#166534]' },
 }
 
 function PromoRiskBadge({ risk }) {
@@ -18,13 +18,13 @@ function PromoRiskBadge({ risk }) {
 }
 
 function fmtDays(days) {
-  if (days === 999 || days >= 365) return { text: '1년 이상', cls: 'text-gray-400' }
-  if (days >= 180) return { text: '6개월 이상', cls: 'text-green-600' }
-  if (days >= 90)  return { text: '3개월 이상', cls: 'text-green-700' }
-  if (days >= 30)  return { text: `${Math.floor(days / 30)}개월`, cls: 'text-blue-600 font-medium' }
-  if (days >= 14)  return { text: `${days}일`, cls: 'text-yellow-600 font-semibold' }
-  if (days >= 7)   return { text: `${days}일`, cls: 'text-orange-600 font-bold' }
-  return { text: `${days}일`, cls: 'text-red-600 font-bold' }
+  if (days === 999 || days >= 365) return { text: '1년 이상', color: '#94A3B8' }
+  if (days >= 180) return { text: '6개월 이상', color: '#166534' }
+  if (days >= 90)  return { text: '3개월 이상', color: '#166534' }
+  if (days >= 30)  return { text: `${Math.floor(days / 30)}개월`, color: '#1D4ED8' }
+  if (days >= 14)  return { text: `${days}일`, color: '#854D0E' }
+  if (days >= 7)   return { text: `${days}일`, color: '#9A3412' }
+  return { text: `${days}일`, color: '#991B1B' }
 }
 
 function fmtForecast(value, avgDailySales) {
@@ -56,55 +56,50 @@ export default function SellerForecastPage() {
   }))
 
   const getBarColor = (days) => {
-    if (days < 7) return '#ef4444'
-    if (days < 14) return '#f97316'
-    if (days < 30) return '#eab308'
-    return '#9333ea'
+    if (days < 7) return '#EF4444'
+    if (days < 14) return '#F97316'
+    if (days < 30) return '#EAB308'
+    return '#2563EB'
   }
 
   return (
     <SidebarLayout>
-      <div className="min-h-screen bg-purple-50">
+      <div className="min-h-screen bg-[#F8FAFC]">
         <div className="px-6 py-6">
           <div className="mb-6">
-            <h2 className="text-2xl font-bold text-purple-900">수요 예측 분석</h2>
-            <p className="text-purple-600 mt-1 text-sm">최근 30일 평균 판매량 기준 재고 소진 예측</p>
+            <h2 className="text-2xl font-bold" style={{ color: '#0F172A' }}>수요 예측 분석</h2>
+            <p className="mt-1 text-sm" style={{ color: '#64748B' }}>최근 30일 평균 판매량 기준 재고 소진 예측</p>
           </div>
 
           {highRiskCount > 0 && (
-            <div className="mb-5 flex items-center gap-3 bg-red-50 border-2 border-red-300 text-red-700 rounded-xl px-5 py-4">
+            <div className="mb-5 flex items-center gap-3 bg-[#FEF2F2] border-2 border-[#FECACA] text-[#991B1B] rounded-lg px-5 py-4">
               <span className="text-xl">⚠️</span>
-              <span className="font-semibold">
+              <span className="font-semibold text-sm">
                 {highRiskCount}개 상품이 예정된 프로모션 기간 동안 재고 부족이 예상됩니다.
               </span>
             </div>
           )}
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-            <div className="bg-white rounded-xl border border-purple-100 p-4">
-              <p className="text-sm text-gray-500 mb-1">내 상품</p>
-              <p className="text-3xl font-bold text-purple-700">{data.length}</p>
-            </div>
-            <div className="bg-red-50 rounded-xl border border-red-200 p-4">
-              <p className="text-sm text-red-600 mb-1">프로모션 위험</p>
-              <p className="text-3xl font-bold text-red-700">{highRiskCount}</p>
-            </div>
-            <div className="bg-orange-50 rounded-xl border border-orange-200 p-4">
-              <p className="text-sm text-orange-600 mb-1">재입고 필요</p>
-              <p className="text-3xl font-bold text-orange-700">{reorderCount}</p>
-            </div>
-            <div className="bg-yellow-50 rounded-xl border border-yellow-200 p-4">
-              <p className="text-sm text-yellow-600 mb-1">긴급 (7일 미만)</p>
-              <p className="text-3xl font-bold text-yellow-700">{criticalCount}</p>
-            </div>
+            {[
+              { label: '내 상품',       value: data.length,    color: '#0F172A' },
+              { label: '프로모션 위험',  value: highRiskCount,  color: '#991B1B' },
+              { label: '재입고 필요',   value: reorderCount,   color: '#9A3412' },
+              { label: '긴급 (7일 미만)', value: criticalCount, color: '#854D0E' },
+            ].map((s) => (
+              <div key={s.label} className="bg-white rounded-lg border border-[#E2E8F0] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+                <p className="text-sm font-medium" style={{ color: '#64748B' }}>{s.label}</p>
+                <p className="text-3xl font-bold mt-1" style={{ color: s.color }}>{s.value}</p>
+              </div>
+            ))}
           </div>
 
           {chartData.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-purple-100 p-5 mb-6">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4">재고 소진일수</h3>
+            <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5 mb-6">
+              <h3 className="text-sm font-semibold mb-4" style={{ color: '#374151' }}>재고 소진일수</h3>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={chartData} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} unit="일" />
                   <Tooltip formatter={(v, n, props) => {
@@ -122,20 +117,20 @@ export default function SellerForecastPage() {
             </div>
           )}
 
-          <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-x-auto">
+          <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.06)] overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-purple-700 text-white">
+              <thead className="bg-[#F8FAFC]">
                 <tr>
                   {['상품명', 'SKU', '현재재고', '일평균판매', '소진일수', '7일예측', '재고상태', '프로모션 리스크', '조치'].map(h => (
-                    <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide whitespace-nowrap border-b border-[#E2E8F0]" style={{ color: '#64748B' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={9} className="text-center py-10 text-gray-400">로딩 중...</td></tr>
+                  <tr><td colSpan={9} className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>로딩 중...</td></tr>
                 ) : data.length === 0 ? (
-                  <tr><td colSpan={9} className="text-center py-10 text-gray-400">데이터가 없습니다.</td></tr>
+                  <tr><td colSpan={9} className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>데이터가 없습니다.</td></tr>
                 ) : (
                   data.map(d => {
                     const isCritical = d.days_of_stock < 7 && d.days_of_stock !== 999
@@ -143,34 +138,34 @@ export default function SellerForecastPage() {
                     const daysFmt = fmtDays(d.days_of_stock)
                     return (
                       <tr key={d.product_id}
-                        className={`border-t border-gray-100 transition-colors ${
-                          d.promotion_risk === 'HIGH' ? 'bg-red-50 hover:bg-red-100' :
-                          isCritical ? 'bg-orange-50 hover:bg-orange-100' :
-                          isWarn ? 'bg-yellow-50' : 'hover:bg-gray-50'
+                        className={`border-b border-[#F1F5F9] transition-colors ${
+                          d.promotion_risk === 'HIGH' ? 'bg-[#FEF2F2] hover:bg-[#FEE2E2]/50' :
+                          isCritical ? 'bg-[#FFF7ED] hover:bg-[#FFEDD5]/50' :
+                          isWarn ? 'bg-[#FEFCE8]' : 'hover:bg-[#F8FAFC]'
                         }`}>
-                        <td className="px-4 py-3 font-medium text-gray-800">{d.product_name}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-gray-500">{d.sku}</td>
-                        <td className="px-4 py-3 font-semibold">{d.current_stock.toLocaleString()}개</td>
-                        <td className="px-4 py-3 text-gray-600">
-                          {d.avg_daily_sales > 0 ? `${d.avg_daily_sales}/일` : <span className="text-gray-400">데이터 없음</span>}
+                        <td className="px-4 py-3 font-medium" style={{ color: '#0F172A' }}>{d.product_name}</td>
+                        <td className="px-4 py-3 font-mono text-xs" style={{ color: '#64748B' }}>{d.sku}</td>
+                        <td className="px-4 py-3 font-semibold" style={{ color: '#374151' }}>{d.current_stock.toLocaleString()}개</td>
+                        <td className="px-4 py-3" style={{ color: '#64748B' }}>
+                          {d.avg_daily_sales > 0 ? `${d.avg_daily_sales}/일` : <span style={{ color: '#CBD5E1' }}>데이터 없음</span>}
                         </td>
                         <td className="px-4 py-3 font-bold">
-                          <span className={daysFmt.cls}>{daysFmt.text}</span>
+                          <span style={{ color: daysFmt.color }}>{daysFmt.text}</span>
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{fmtForecast(d.forecast_7day, d.avg_daily_sales)}</td>
+                        <td className="px-4 py-3" style={{ color: '#64748B' }}>{fmtForecast(d.forecast_7day, d.avg_daily_sales)}</td>
                         <td className="px-4 py-3">
                           {isCritical
-                            ? <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700 font-bold">긴급</span>
+                            ? <span className="px-2 py-0.5 rounded-full text-xs bg-[#FEE2E2] text-[#991B1B] font-bold">긴급</span>
                             : isWarn
-                            ? <span className="px-2 py-0.5 rounded-full text-xs bg-orange-100 text-orange-700">재입고필요</span>
-                            : <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">정상</span>}
+                            ? <span className="px-2 py-0.5 rounded-full text-xs bg-[#FED7AA] text-[#9A3412]">재입고필요</span>
+                            : <span className="px-2 py-0.5 rounded-full text-xs bg-[#DCFCE7] text-[#166534]">정상</span>}
                         </td>
                         <td className="px-4 py-3"><PromoRiskBadge risk={d.promotion_risk} /></td>
                         <td className="px-4 py-3">
                           {(isCritical || isWarn || d.promotion_risk !== 'LOW') && (
                             <button
                               onClick={() => navigate('/seller/inbound-request')}
-                              className="text-xs px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors whitespace-nowrap">
+                              className="text-xs px-2 py-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-[6px] transition-colors whitespace-nowrap">
                               입고 요청
                             </button>
                           )}

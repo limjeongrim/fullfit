@@ -84,16 +84,12 @@ const SELLER_MENUS = [
 const MENUS_BY_ROLE = { ADMIN: ADMIN_MENUS, WORKER: WORKER_MENUS, SELLER: SELLER_MENUS }
 
 const LOGO_BY_ROLE = {
-  ADMIN:  { title: 'FullFit', subtitle: '풀필먼트 운영' },
-  WORKER: { title: 'FullFit', subtitle: '창고 운영' },
-  SELLER: { title: 'FullFit', subtitle: '셀러 포털' },
+  ADMIN:  { subtitle: '풀필먼트 운영' },
+  WORKER: { subtitle: '창고 운영' },
+  SELLER: { subtitle: '셀러 포털' },
 }
 
-const ROLE_BADGE = {
-  ADMIN:  { label: '관리자', cls: 'bg-blue-100 text-blue-700' },
-  WORKER: { label: '작업자', cls: 'bg-green-100 text-green-700' },
-  SELLER: { label: '셀러',   cls: 'bg-purple-100 text-purple-700' },
-}
+const ROLE_LABEL = { ADMIN: '관리자', WORKER: '작업자', SELLER: '셀러' }
 
 const PAGE_TITLES = {
   '/admin/dashboard':    '대시보드',
@@ -133,15 +129,14 @@ export default function SidebarLayout({ children }) {
   const role = user?.role || 'ADMIN'
   const menus = MENUS_BY_ROLE[role] || []
   const logo = LOGO_BY_ROLE[role] || LOGO_BY_ROLE.ADMIN
-  const badge = ROLE_BADGE[role] || ROLE_BADGE.ADMIN
+  const roleLabel = ROLE_LABEL[role] || ''
   const currentTitle = PAGE_TITLES[location.pathname] || 'FullFit'
 
   const handleLogout = () => { logout(); navigate('/login') }
-
   const closeSidebar = () => setSidebarOpen(false)
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-[#F8FAFC]">
       {/* Mobile backdrop */}
       {sidebarOpen && (
         <div
@@ -151,22 +146,30 @@ export default function SidebarLayout({ children }) {
       )}
 
       {/* ── Sidebar ── */}
-      <aside className={`
-        fixed inset-y-0 left-0 z-40 w-60 bg-white border-r border-gray-200
-        flex flex-col transition-transform duration-200 ease-in-out
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0
-      `}>
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-40 w-60 flex flex-col
+          transition-transform duration-200 ease-in-out
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0
+        `}
+        style={{ background: '#0F172A', borderRight: '1px solid rgba(255,255,255,0.05)' }}
+      >
         {/* Logo */}
-        <div className="px-5 py-5 border-b border-gray-100 shrink-0">
-          <div className="text-xl font-bold text-gray-900">{logo.title}</div>
-          <div className="text-xs text-gray-400 mt-0.5">{logo.subtitle}</div>
+        <div className="px-5 shrink-0 flex items-center" style={{ height: '56px' }}>
+          <div>
+            <div className="text-xl font-bold text-white leading-none">FullFit</div>
+            <div className="text-[11px] mt-0.5" style={{ color: '#94A3B8' }}>{logo.subtitle}</div>
+          </div>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3 px-2">
           {menus.map((group) => (
             <div key={group.section} className="mb-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 px-3 mb-1">
+              <p
+                className="px-3 mb-1 text-[11px] font-semibold uppercase"
+                style={{ color: '#475569', letterSpacing: '0.05em' }}
+              >
                 {group.section}
               </p>
               {group.items.map((item) => {
@@ -175,13 +178,14 @@ export default function SidebarLayout({ children }) {
                   <button
                     key={item.path}
                     onClick={() => { navigate(item.path); closeSidebar() }}
-                    className={`w-full flex items-center gap-2.5 px-3 h-9 rounded-lg text-sm transition-colors mb-0.5 text-left ${
+                    className={`w-full flex items-center gap-2.5 h-9 text-sm transition-colors mb-0.5 text-left ${
                       isActive
-                        ? 'bg-blue-50 text-blue-700 font-medium'
-                        : 'text-gray-700 hover:bg-gray-100'
+                        ? 'rounded-r-lg border-l-[3px] border-[#3B82F6] bg-[#1E293B] text-white'
+                        : 'rounded-lg border-l-[3px] border-transparent text-[#94A3B8] hover:bg-[#1E293B] hover:text-[#CBD5E1]'
                     }`}
+                    style={{ paddingLeft: '9px', paddingRight: '12px' }}
                   >
-                    <span className="text-base leading-none w-5 text-center">{item.icon}</span>
+                    <span className="text-base leading-none w-5 text-center shrink-0">{item.icon}</span>
                     <span>{item.label}</span>
                   </button>
                 )
@@ -191,21 +195,19 @@ export default function SidebarLayout({ children }) {
         </nav>
 
         {/* User info + logout */}
-        <div className="px-3 py-4 border-t border-gray-100 shrink-0">
-          <div className="flex items-center gap-2 px-2 mb-2 min-w-0">
+        <div className="px-3 py-4 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg mb-1 min-w-0" style={{ background: '#1E293B' }}>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">
+              <p className="text-sm font-medium text-white truncate leading-tight">
                 {user?.full_name || user?.email}
               </p>
-              <p className="text-xs text-gray-400 truncate">{user?.email}</p>
+              <p className="text-xs truncate mt-0.5" style={{ color: '#64748B' }}>{roleLabel}</p>
             </div>
-            <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold ${badge.cls}`}>
-              {badge.label}
-            </span>
           </div>
           <button
             onClick={handleLogout}
-            className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+            className="w-full text-left px-3 py-2 text-sm rounded-lg transition-colors hover:text-[#EF4444] hover:bg-[rgba(239,68,68,0.08)]"
+            style={{ color: '#94A3B8' }}
           >
             로그아웃
           </button>
@@ -215,10 +217,13 @@ export default function SidebarLayout({ children }) {
       {/* ── Right: navbar + content ── */}
       <div className="flex flex-col flex-1 lg:ml-60 min-w-0">
         {/* Fixed top navbar */}
-        <header className="fixed top-0 left-0 right-0 lg:left-60 h-14 z-20 bg-white border-b border-gray-200 flex items-center px-4 justify-between">
+        <header
+          className="fixed top-0 left-0 right-0 lg:left-60 z-20 bg-white border-b border-[#E2E8F0] flex items-center px-4 justify-between"
+          style={{ height: '56px' }}
+        >
           <div className="flex items-center gap-3">
             <button
-              className="lg:hidden p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-600"
+              className="lg:hidden p-1.5 rounded-lg hover:bg-[#F1F5F9] transition-colors text-[#64748B]"
               onClick={() => setSidebarOpen((v) => !v)}
               aria-label="메뉴"
             >
@@ -226,11 +231,11 @@ export default function SidebarLayout({ children }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <h1 className="text-base font-semibold text-gray-800">{currentTitle}</h1>
+            <h1 className="font-semibold" style={{ fontSize: '18px', color: '#0F172A' }}>{currentTitle}</h1>
           </div>
           <div className="flex items-center gap-3">
             <NotificationBell />
-            <span className="hidden sm:inline text-sm text-gray-500">{user?.email}</span>
+            <span className="hidden sm:inline text-sm" style={{ color: '#64748B' }}>{user?.email}</span>
           </div>
         </header>
 

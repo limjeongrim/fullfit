@@ -2,17 +2,17 @@ import { useEffect } from 'react'
 import useToastStore from '../store/toastStore'
 
 const TYPE_STYLES = {
-  success: 'bg-green-500 text-white',
-  error:   'bg-red-500 text-white',
-  warning: 'bg-yellow-400 text-gray-900',
-  info:    'bg-blue-500 text-white',
+  success: 'bg-[#DCFCE7] text-[#166534] border border-[#BBF7D0]',
+  error:   'bg-[#FEE2E2] text-[#991B1B] border border-[#FECACA]',
+  warning: 'bg-[#FEF9C3] text-[#854D0E] border border-[#FEF08A]',
+  info:    'bg-[#DBEAFE] text-[#1D4ED8] border border-[#BFDBFE]',
 }
 
 const TYPE_ICONS = {
-  success: '✅',
-  error:   '❌',
-  warning: '⚠️',
-  info:    'ℹ️',
+  success: '✓',
+  error:   '✕',
+  warning: '⚠',
+  info:    'ℹ',
 }
 
 function ToastItem({ toast }) {
@@ -25,15 +25,15 @@ function ToastItem({ toast }) {
 
   return (
     <div
-      className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium
+      className={`flex items-center gap-2.5 px-4 py-3 rounded-lg shadow-md text-sm font-medium
         min-w-[240px] max-w-sm animate-slide-in
         ${TYPE_STYLES[toast.type] || TYPE_STYLES.info}`}
     >
-      <span>{TYPE_ICONS[toast.type] || 'ℹ️'}</span>
+      <span className="text-base leading-none shrink-0">{TYPE_ICONS[toast.type] || TYPE_ICONS.info}</span>
       <span className="flex-1">{toast.message}</span>
       <button
         onClick={() => removeToast(toast.id)}
-        className="ml-2 opacity-70 hover:opacity-100 transition-opacity text-base leading-none"
+        className="ml-2 opacity-50 hover:opacity-100 transition-opacity text-base leading-none"
       >
         ×
       </button>

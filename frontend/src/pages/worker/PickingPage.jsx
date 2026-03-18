@@ -9,11 +9,11 @@ const CHANNEL_LABELS = {
 }
 
 const CHANNEL_CLS = {
-  SMARTSTORE: 'bg-green-100 text-green-700',
-  OLIVEYOUNG: 'bg-orange-100 text-orange-700',
-  ZIGZAG:     'bg-pink-100 text-pink-700',
-  CAFE24:     'bg-blue-100 text-blue-700',
-  MANUAL:     'bg-gray-100 text-gray-600',
+  SMARTSTORE: 'bg-[#DCFCE7] text-[#166534]',
+  OLIVEYOUNG: 'bg-[#FEF3C7] text-[#92400E]',
+  ZIGZAG:     'bg-[#FDF4FF] text-[#7E22CE]',
+  CAFE24:     'bg-[#DBEAFE] text-[#1D4ED8]',
+  MANUAL:     'bg-[#F1F5F9] text-[#64748B]',
 }
 
 export default function PickingPage() {
@@ -66,9 +66,9 @@ export default function PickingPage() {
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
   const tabs = [
-    { key: 'waiting', label: '대기',  count: waitingOrders.length, activeCls: 'bg-blue-600 text-white',   inactiveCls: 'bg-white text-gray-600 border border-gray-200' },
-    { key: 'picking', label: '진행중', count: pickingOrders.length, activeCls: 'bg-yellow-500 text-white', inactiveCls: 'bg-white text-gray-600 border border-gray-200' },
-    { key: 'done',    label: '완료',  count: doneOrders.length,    activeCls: 'bg-green-600 text-white',  inactiveCls: 'bg-white text-gray-600 border border-gray-200' },
+    { key: 'waiting', label: '대기',  count: waitingOrders.length },
+    { key: 'picking', label: '진행중', count: pickingOrders.length },
+    { key: 'done',    label: '완료',  count: doneOrders.length },
   ]
 
   const tabOrders = activeTab === 'waiting' ? waitingOrders : activeTab === 'picking' ? pickingOrders : doneOrders
@@ -76,13 +76,13 @@ export default function PickingPage() {
 
   return (
     <SidebarLayout>
-      <div className="min-h-screen bg-green-50">
+      <div className="min-h-screen bg-[#F8FAFC]">
         {/* Sticky status bar */}
-        <div className="sticky top-14 z-10 bg-white border-b border-green-100 shadow-sm px-5 py-3 flex items-center gap-3 text-sm flex-wrap">
-          <span className="font-semibold text-gray-700">오늘 처리 현황</span>
-          <span className="px-3 py-1 rounded-full font-bold bg-blue-100 text-blue-700">대기 {waitingOrders.length}건</span>
-          <span className="px-3 py-1 rounded-full font-bold bg-yellow-100 text-yellow-700">진행중 {pickingOrders.length}건</span>
-          <span className="px-3 py-1 rounded-full font-bold bg-green-100 text-green-700">완료 {doneOrders.length}건</span>
+        <div className="sticky top-14 z-10 bg-white border-b border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.06)] px-5 py-3 flex items-center gap-3 text-sm flex-wrap">
+          <span className="font-semibold" style={{ color: '#374151' }}>오늘 처리 현황</span>
+          <span className="px-3 py-1 rounded-full font-bold bg-[#DBEAFE] text-[#1D4ED8]">대기 {waitingOrders.length}건</span>
+          <span className="px-3 py-1 rounded-full font-bold bg-[#FEF9C3] text-[#854D0E]">진행중 {pickingOrders.length}건</span>
+          <span className="px-3 py-1 rounded-full font-bold bg-[#DCFCE7] text-[#166534]">완료 {doneOrders.length}건</span>
         </div>
 
         <div className="max-w-2xl mx-auto px-4 py-5">
@@ -90,12 +90,14 @@ export default function PickingPage() {
           <div className="flex gap-2 mb-4">
             {tabs.map((tab) => (
               <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-1.5 ${
-                  activeTab === tab.key ? tab.activeCls : tab.inactiveCls + ' hover:bg-gray-50'
-                }`}>
+                className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-1.5 ${
+                  activeTab === tab.key
+                    ? 'bg-[#2563EB] text-white'
+                    : 'bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC]'
+                }`} style={activeTab !== tab.key ? { color: '#374151' } : {}}>
                 {tab.label}
                 <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
-                  activeTab === tab.key ? 'bg-white/30' : 'bg-gray-100 text-gray-600'
+                  activeTab === tab.key ? 'bg-white/30 text-white' : 'bg-[#F1F5F9] text-[#64748B]'
                 }`}>{tab.count}</span>
               </button>
             ))}
@@ -103,9 +105,9 @@ export default function PickingPage() {
 
           {/* Order cards */}
           {loading ? (
-            <div className="text-center py-16 text-gray-400 text-lg">로딩 중...</div>
+            <div className="text-center py-16 text-lg" style={{ color: '#94A3B8' }}>로딩 중...</div>
           ) : tabOrders.length === 0 ? (
-            <div className="text-center py-16 text-gray-400">
+            <div className="text-center py-16" style={{ color: '#94A3B8' }}>
               <div className="text-5xl mb-4">{activeTab === 'done' ? '📋' : '🎉'}</div>
               <p className="text-lg font-semibold">
                 {activeTab === 'done' ? '완료된 주문이 없습니다' : '처리할 주문이 없습니다'}
@@ -121,46 +123,46 @@ export default function PickingPage() {
                 const isDone = o.status === 'PACKED' || o.status === 'SHIPPED'
                 return (
                   <div key={o.id}
-                    className={`bg-white rounded-2xl shadow-sm border-2 p-5 transition-all ${
-                      isPicking ? 'border-blue-400 bg-blue-50' : isDone ? 'border-green-200 bg-green-50' : 'border-gray-100'
+                    className={`bg-white rounded-xl shadow-sm border-2 p-5 transition-all ${
+                      isPicking ? 'border-[#2563EB] bg-[#EFF6FF]' : isDone ? 'border-[#DCFCE7]' : 'border-[#E2E8F0]'
                     }`}>
                     <div className="flex items-start justify-between mb-3">
                       <div>
-                        <span className="font-mono text-sm text-gray-500">{o.order_number}</span>
+                        <span className="font-mono text-sm" style={{ color: '#64748B' }}>{o.order_number}</span>
                         <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${CHANNEL_CLS[o.channel] || 'bg-gray-100 text-gray-600'}`}>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${CHANNEL_CLS[o.channel] || 'bg-[#F1F5F9] text-[#64748B]'}`}>
                             {CHANNEL_LABELS[o.channel] || o.channel}
                           </span>
                           {hasCold && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-cyan-100 text-cyan-700">❄️ 냉장포함</span>
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[#ECFEFF] text-[#0E7490]">❄️ 냉장포함</span>
                           )}
-                          {isPicking && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">피킹중</span>}
-                          {o.status === 'PACKED' && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-700">패킹완료</span>}
-                          {o.status === 'SHIPPED' && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">출고완료</span>}
+                          {isPicking && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[#DBEAFE] text-[#1D4ED8]">피킹중</span>}
+                          {o.status === 'PACKED' && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[#FED7AA] text-[#9A3412]">패킹완료</span>}
+                          {o.status === 'SHIPPED' && <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[#DCFCE7] text-[#166534]">출고완료</span>}
                         </div>
                       </div>
-                      <span className="text-xs text-gray-400 whitespace-nowrap">
+                      <span className="text-xs whitespace-nowrap" style={{ color: '#94A3B8' }}>
                         {new Date(o.created_at).toLocaleDateString('ko-KR')}
                       </span>
                     </div>
 
                     <div className="mb-3">
-                      <p className="text-lg font-bold text-gray-800">{o.receiver_name}</p>
-                      <p className="text-sm text-gray-500 mt-0.5 truncate">{o.receiver_address}</p>
+                      <p className="text-lg font-bold" style={{ color: '#0F172A' }}>{o.receiver_name}</p>
+                      <p className="text-sm mt-0.5 truncate" style={{ color: '#64748B' }}>{o.receiver_address}</p>
                     </div>
 
                     {/* Product list */}
                     {o.items && o.items.length > 0 && (
-                      <div className="mb-3 bg-gray-50 rounded-xl p-3">
-                        <p className="text-xs text-gray-400 mb-1.5 font-medium">상품 {totalQty}개</p>
+                      <div className="mb-3 bg-[#F8FAFC] rounded-lg p-3 border border-[#E2E8F0]">
+                        <p className="text-xs mb-1.5 font-medium" style={{ color: '#94A3B8' }}>상품 {totalQty}개</p>
                         <div className="flex flex-col gap-1">
                           {o.items.map((it, idx) => (
                             <div key={idx} className="flex items-center justify-between text-sm">
-                              <span className="text-gray-700 flex items-center gap-1">
-                                {it.storage_type === 'COLD' && <span className="text-cyan-500 text-xs">❄️</span>}
+                              <span className="flex items-center gap-1" style={{ color: '#374151' }}>
+                                {it.storage_type === 'COLD' && <span className="text-xs" style={{ color: '#0E7490' }}>❄️</span>}
                                 {it.product_name}
                               </span>
-                              <span className="font-semibold text-gray-900 ml-2 shrink-0">× {it.quantity}</span>
+                              <span className="font-semibold ml-2 shrink-0" style={{ color: '#0F172A' }}>× {it.quantity}</span>
                             </div>
                           ))}
                         </div>
@@ -171,7 +173,7 @@ export default function PickingPage() {
                       <button
                         onClick={() => handleAction(o.id, 'PICKING')}
                         disabled={isActing}
-                        className="w-full py-4 bg-yellow-500 hover:bg-yellow-600 active:bg-yellow-700 text-white text-base font-bold rounded-xl transition-colors disabled:opacity-50">
+                        className="w-full py-4 bg-[#D97706] hover:bg-[#B45309] active:bg-[#92400E] text-white text-base font-bold rounded-lg transition-colors disabled:opacity-50">
                         {isActing ? '처리 중...' : '📦 피킹 시작'}
                       </button>
                     )}
@@ -179,7 +181,7 @@ export default function PickingPage() {
                       <button
                         onClick={() => setConfirmPackId(o.id)}
                         disabled={isActing}
-                        className="w-full py-4 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-base font-bold rounded-xl transition-colors disabled:opacity-50">
+                        className="w-full py-4 bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white text-base font-bold rounded-lg transition-colors disabled:opacity-50">
                         {isActing ? '처리 중...' : '✅ 패킹 완료'}
                       </button>
                     )}
@@ -196,21 +198,21 @@ export default function PickingPage() {
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
               <div className="text-center mb-5">
                 <div className="text-5xl mb-3">📦</div>
-                <h3 className="text-xl font-bold text-gray-800">패킹 완료 처리</h3>
-                <p className="text-gray-600 mt-2">패킹 완료 처리하시겠습니까?</p>
+                <h3 className="text-xl font-bold" style={{ color: '#0F172A' }}>패킹 완료 처리</h3>
+                <p className="mt-2" style={{ color: '#64748B' }}>패킹 완료 처리하시겠습니까?</p>
               </div>
-              <div className="bg-blue-50 rounded-xl p-4 mb-5">
-                <p className="font-mono text-sm text-gray-500">{confirmOrder.order_number}</p>
-                <p className="text-lg font-bold text-gray-800 mt-1">{confirmOrder.receiver_name}</p>
-                <p className="text-sm text-gray-500 truncate">{confirmOrder.receiver_address}</p>
+              <div className="bg-[#EFF6FF] rounded-xl p-4 mb-5 border border-[#BFDBFE]">
+                <p className="font-mono text-sm" style={{ color: '#64748B' }}>{confirmOrder.order_number}</p>
+                <p className="text-lg font-bold mt-1" style={{ color: '#0F172A' }}>{confirmOrder.receiver_name}</p>
+                <p className="text-sm truncate" style={{ color: '#64748B' }}>{confirmOrder.receiver_address}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => setConfirmPackId(null)}
-                  className="py-4 border-2 border-gray-200 rounded-xl text-base font-semibold text-gray-600 hover:bg-gray-50 transition-colors">
+                  className="py-4 border-2 border-[#E2E8F0] rounded-xl text-base font-semibold hover:bg-[#F8FAFC] transition-colors" style={{ color: '#374151' }}>
                   취소
                 </button>
                 <button onClick={() => { setConfirmPackId(null); handleAction(confirmPackId, 'PACKED') }}
-                  className="py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-base font-bold transition-colors">
+                  className="py-4 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl text-base font-bold transition-colors">
                   패킹 완료
                 </button>
               </div>

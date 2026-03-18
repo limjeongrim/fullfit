@@ -5,26 +5,28 @@ import api from '../../api/axiosInstance'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
 
 function ExpiryBadge({ days }) {
-  if (days <= 30) return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">만료임박</span>
-  if (days <= 60) return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">주의</span>
-  return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">정상</span>
+  if (days <= 30) return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#FEE2E2] text-[#991B1B]">만료임박</span>
+  if (days <= 60) return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#FEF9C3] text-[#854D0E]">주의</span>
+  return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#DCFCE7] text-[#166534]">정상</span>
 }
 
 function DaysCell({ days }) {
-  const cls = days <= 30 ? 'text-red-600 font-semibold' : days <= 60 ? 'text-yellow-600 font-semibold' : 'text-green-700'
+  const cls = days <= 30 ? 'text-[#DC2626] font-semibold' : days <= 60 ? 'text-[#D97706] font-semibold' : 'text-[#16A34A]'
   return <span className={cls}>{days}일</span>
 }
 
 const STORAGE_LABEL = { ROOM_TEMP: '상온', COLD: '냉장' }
 
+const INPUT_CLS = "w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB]"
+
 function LiveIndicator() {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="relative flex h-2 w-2">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#16A34A] opacity-60"></span>
+        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#16A34A]"></span>
       </span>
-      <span className="text-xs text-green-600 font-medium">실시간</span>
+      <span className="text-xs" style={{ color: '#64748B' }}>실시간</span>
     </span>
   )
 }
@@ -44,7 +46,7 @@ function LastUpdated({ time }) {
     const id = setInterval(update, 1000)
     return () => clearInterval(id)
   }, [time])
-  return <span className="text-xs text-gray-400">마지막 업데이트: {display}</span>
+  return <span className="text-xs" style={{ color: '#94A3B8' }}>마지막 업데이트: {display}</span>
 }
 
 export default function InventoryPage() {
@@ -96,7 +98,6 @@ export default function InventoryPage() {
   }, [])
   useEffect(() => { fetchInventory() }, [filterSeller, tick])
 
-  // Auto-refresh every 30 seconds
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 30000)
     return () => clearInterval(id)
@@ -145,10 +146,10 @@ export default function InventoryPage() {
 
   return (
     <SidebarLayout>
-      <div className="min-h-screen bg-blue-50">
+      <div className="min-h-screen bg-[#F8FAFC]">
         <div className="px-6 py-6">
           {alertCount > 0 && (
-            <div className="mb-4 flex items-center gap-3 bg-red-50 border border-red-300 text-red-700 rounded-xl px-5 py-3">
+            <div className="mb-4 flex items-center gap-3 bg-[#FEF2F2] border border-[#FECACA] text-[#991B1B] rounded-xl px-5 py-3">
               <span className="text-lg">⚠️</span>
               <span className="font-semibold">주의: {alertCount}개 상품의 유통기한이 30일 이내입니다</span>
             </div>
@@ -165,50 +166,52 @@ export default function InventoryPage() {
               {[{ key: 'all', label: '전체' }, { key: 'expiring', label: '만료임박' }, { key: 'low_stock', label: '재고부족' }, { key: 'cold', label: '냉장보관' }].map(({ key, label }) => (
                 <button key={key} onClick={() => setFilter(key)}
                   className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    filter === key ? 'bg-blue-700 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-blue-50'
+                    filter === key
+                      ? 'bg-[#2563EB] text-white'
+                      : 'bg-white border border-[#E2E8F0] text-[#374151] hover:bg-[#F8FAFC]'
                   }`}>
                   {label}
                 </button>
               ))}
               <select value={filterSeller} onChange={(e) => setFilterSeller(e.target.value)}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                className="px-3 py-1.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30">
                 <option value="">전체 셀러</option>
                 {sellers.map((s) => <option key={s.id} value={s.id}>{s.full_name} ({s.company_name || s.email})</option>)}
               </select>
               <input type="text" placeholder="상품명 또는 SKU 검색" value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="ml-2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-52" />
+                className="ml-2 px-3 py-1.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 w-52" />
             </div>
             <button onClick={() => setShowModal(true)}
-              className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors">
+              className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-2 rounded-[6px] text-sm font-semibold transition-colors">
               + 입고 등록
             </button>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-blue-100">
+          <div className="bg-white rounded-lg border border-[#E2E8F0] overflow-x-auto shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
             <table className="w-full text-sm">
-              <thead className="bg-blue-700 text-white">
+              <thead className="bg-[#F8FAFC]">
                 <tr>
                   {['상품명', 'SKU', 'LOT번호', '유통기한', '남은일수', '수량', '보관방식', '상태'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide whitespace-nowrap border-b border-[#E2E8F0]" style={{ color: '#64748B' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center py-10 text-gray-400">데이터가 없습니다.</td></tr>
+                  <tr><td colSpan={8} className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>데이터가 없습니다.</td></tr>
                 ) : (
                   filtered.map((row) => (
                     <tr key={row.id}
-                      className={`border-t border-gray-100 hover:bg-blue-50 transition-colors ${row.days_until_expiry <= 30 ? 'bg-red-50' : ''}`}>
-                      <td className="px-4 py-3 font-medium text-gray-800">{row.product_name}</td>
-                      <td className="px-4 py-3 text-gray-500">{row.sku}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-600">{row.lot_number}</td>
-                      <td className="px-4 py-3 text-gray-700">{row.expiry_date}</td>
+                      className={`border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors ${row.days_until_expiry <= 30 ? 'bg-[#FEF2F2]' : ''}`}>
+                      <td className="px-4 py-3 font-medium" style={{ color: '#0F172A' }}>{row.product_name}</td>
+                      <td className="px-4 py-3" style={{ color: '#64748B' }}>{row.sku}</td>
+                      <td className="px-4 py-3 font-mono text-xs" style={{ color: '#64748B' }}>{row.lot_number}</td>
+                      <td className="px-4 py-3" style={{ color: '#374151' }}>{row.expiry_date}</td>
                       <td className="px-4 py-3"><DaysCell days={row.days_until_expiry} /></td>
-                      <td className="px-4 py-3 text-gray-700">{row.quantity.toLocaleString()}</td>
+                      <td className="px-4 py-3" style={{ color: '#374151' }}>{row.quantity.toLocaleString()}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${row.storage_type === 'COLD' ? 'bg-cyan-100 text-cyan-700' : 'bg-gray-100 text-gray-600'}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${row.storage_type === 'COLD' ? 'bg-[#ECFEFF] text-[#0E7490]' : 'bg-[#F1F5F9] text-[#475569]'}`}>
                           {STORAGE_LABEL[row.storage_type]}
                         </span>
                       </td>
@@ -225,44 +228,40 @@ export default function InventoryPage() {
         {showModal && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8">
-              <h3 className="text-lg font-bold text-gray-800 mb-6">입고 등록</h3>
+              <h3 className="text-lg font-bold mb-6" style={{ color: '#0F172A' }}>입고 등록</h3>
               <form onSubmit={handleInboundSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">상품 선택 *</label>
-                  <select name="product_id" value={form.product_id} onChange={handleFormChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                  <label className="block text-sm font-medium mb-1" style={{ color: '#374151' }}>상품 선택 *</label>
+                  <select name="product_id" value={form.product_id} onChange={handleFormChange} className={INPUT_CLS}>
                     <option value="">상품을 선택하세요</option>
                     {products.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">LOT번호 *</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: '#374151' }}>LOT번호 *</label>
                   <input type="text" name="lot_number" value={form.lot_number} onChange={handleFormChange}
-                    placeholder="예: LOT-2026-005"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                    placeholder="예: LOT-2026-005" className={INPUT_CLS} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">유통기한 *</label>
-                  <input type="date" name="expiry_date" value={form.expiry_date} onChange={handleFormChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                  <label className="block text-sm font-medium mb-1" style={{ color: '#374151' }}>유통기한 *</label>
+                  <input type="date" name="expiry_date" value={form.expiry_date} onChange={handleFormChange} className={INPUT_CLS} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">수량 *</label>
-                  <input type="number" name="quantity" value={form.quantity} onChange={handleFormChange} min={1} placeholder="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                  <label className="block text-sm font-medium mb-1" style={{ color: '#374151' }}>수량 *</label>
+                  <input type="number" name="quantity" value={form.quantity} onChange={handleFormChange} min={1} placeholder="0" className={INPUT_CLS} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">메모</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: '#374151' }}>메모</label>
                   <textarea name="note" value={form.note} onChange={handleFormChange} rows={2}
                     placeholder="선택 입력"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
+                    className="w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] resize-none" />
                 </div>
-                {formError && <div className="bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg px-4 py-2">{formError}</div>}
+                {formError && <div className="bg-[#FEE2E2] border border-[#FECACA] text-[#991B1B] text-sm rounded-lg px-4 py-2">{formError}</div>}
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => { setShowModal(false); setFormError('') }}
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">취소</button>
+                    className="flex-1 px-4 py-2 border border-[#E2E8F0] rounded-[6px] text-sm text-[#374151] hover:bg-[#F8FAFC] transition-colors">취소</button>
                   <button type="submit" disabled={submitting}
-                    className="flex-1 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50">
+                    className="flex-1 bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2 rounded-[6px] text-sm font-semibold transition-colors disabled:opacity-50">
                     {submitting ? '등록 중...' : '입고 등록'}
                   </button>
                 </div>

@@ -4,18 +4,18 @@ import DeliveryMap from '../../components/DeliveryMap'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
 
 const STATUS_META = {
-  READY:            { label: '접수 완료', cls: 'bg-gray-100 text-gray-600' },
-  IN_TRANSIT:       { label: '이동중',    cls: 'bg-blue-100 text-blue-700' },
-  OUT_FOR_DELIVERY: { label: '배달 출발', cls: 'bg-orange-100 text-orange-700' },
-  DELIVERED:        { label: '배송 완료', cls: 'bg-green-100 text-green-700' },
-  FAILED:           { label: '배송 실패', cls: 'bg-red-100 text-red-700' },
+  READY:            { label: '접수 완료', cls: 'bg-[#F1F5F9] text-[#475569]' },
+  IN_TRANSIT:       { label: '이동중',    cls: 'bg-[#DBEAFE] text-[#1D4ED8]' },
+  OUT_FOR_DELIVERY: { label: '배달 출발', cls: 'bg-[#FED7AA] text-[#9A3412]' },
+  DELIVERED:        { label: '배송 완료', cls: 'bg-[#DCFCE7] text-[#166534]' },
+  FAILED:           { label: '배송 실패', cls: 'bg-[#FEE2E2] text-[#991B1B]' },
 }
 
 const CARRIER_META = {
-  CJ:     { label: 'CJ대한통운', cls: 'bg-blue-100 text-blue-700' },
-  HANJIN: { label: '한진택배',   cls: 'bg-orange-100 text-orange-700' },
-  LOTTE:  { label: '롯데택배',   cls: 'bg-red-100 text-red-700' },
-  ETC:    { label: '기타',       cls: 'bg-gray-100 text-gray-500' },
+  CJ:     { label: 'CJ대한통운', cls: 'bg-[#DBEAFE] text-[#1D4ED8]' },
+  HANJIN: { label: '한진택배',   cls: 'bg-[#FED7AA] text-[#9A3412]' },
+  LOTTE:  { label: '롯데택배',   cls: 'bg-[#FEE2E2] text-[#991B1B]' },
+  ETC:    { label: '기타',       cls: 'bg-[#F1F5F9] text-[#64748B]' },
 }
 
 function StatusBadge({ status }) {
@@ -51,25 +51,25 @@ function TrackingModal({ tracking, onClose }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-        <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+        <div className="px-6 py-5 border-b border-[#E2E8F0] flex items-center justify-between">
           <div>
-            <h3 className="font-bold text-lg text-gray-800">배송 추적</h3>
-            <p className="text-xs text-gray-500 mt-0.5 font-mono">{tracking}</p>
+            <h3 className="font-bold text-lg" style={{ color: '#0F172A' }}>배송 추적</h3>
+            <p className="text-xs font-mono mt-0.5" style={{ color: '#64748B' }}>{tracking}</p>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+          <button onClick={onClose} className="text-2xl leading-none" style={{ color: '#94A3B8' }}>×</button>
         </div>
 
         <div className="px-6 py-5">
           {loading ? (
-            <div className="text-center text-gray-400 py-8">로딩 중...</div>
+            <div className="text-center py-8" style={{ color: '#94A3B8' }}>로딩 중...</div>
           ) : !data ? (
-            <div className="text-center text-gray-400 py-8">추적 정보를 불러올 수 없습니다.</div>
+            <div className="text-center py-8" style={{ color: '#94A3B8' }}>추적 정보를 불러올 수 없습니다.</div>
           ) : (
             <>
-              <div className="flex items-center justify-between mb-5 p-3 bg-gray-50 rounded-xl">
+              <div className="flex items-center justify-between mb-5 p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
                 <div>
-                  <p className="text-xs text-gray-500">택배사</p>
-                  <p className="font-semibold text-gray-800">{CARRIER_META[data.carrier]?.label || data.carrier}</p>
+                  <p className="text-xs" style={{ color: '#64748B' }}>택배사</p>
+                  <p className="font-semibold text-sm" style={{ color: '#0F172A' }}>{CARRIER_META[data.carrier]?.label || data.carrier}</p>
                 </div>
                 <StatusBadge status={data.current_status} />
               </div>
@@ -78,17 +78,17 @@ function TrackingModal({ tracking, onClose }) {
                 {data.timeline.map((step, i) => (
                   <div key={i} className="flex gap-3">
                     <div className="flex flex-col items-center">
-                      <div className={`w-3 h-3 rounded-full mt-1 shrink-0 border-2 ${step.done ? 'bg-blue-600 border-blue-600' : 'bg-white border-gray-300'}`} />
+                      <div className={`w-3 h-3 rounded-full mt-1 shrink-0 border-2 ${step.done ? 'bg-[#2563EB] border-[#2563EB]' : 'bg-white border-[#CBD5E1]'}`} />
                       {i < data.timeline.length - 1 && (
-                        <div className={`w-0.5 h-10 ${step.done ? 'bg-blue-300' : 'bg-gray-200'}`} />
+                        <div className={`w-0.5 h-10 ${step.done ? 'bg-[#BFDBFE]' : 'bg-[#E2E8F0]'}`} />
                       )}
                     </div>
                     <div className="pb-6">
-                      <p className={`text-sm font-semibold ${step.done ? 'text-gray-800' : 'text-gray-400'}`}>{step.status}</p>
-                      {step.location && <p className={`text-xs ${step.done ? 'text-gray-500' : 'text-gray-300'}`}>{step.location}</p>}
-                      {step.message && <p className={`text-xs ${step.done ? 'text-gray-500' : 'text-gray-300'}`}>{step.message}</p>}
+                      <p className={`text-sm font-semibold`} style={{ color: step.done ? '#0F172A' : '#CBD5E1' }}>{step.status}</p>
+                      {step.location && <p className="text-xs" style={{ color: step.done ? '#64748B' : '#CBD5E1' }}>{step.location}</p>}
+                      {step.message && <p className="text-xs" style={{ color: step.done ? '#64748B' : '#CBD5E1' }}>{step.message}</p>}
                       {step.timestamp && (
-                        <p className="text-[10px] text-gray-400 mt-0.5">
+                        <p className="text-[10px] mt-0.5" style={{ color: '#94A3B8' }}>
                           {new Date(step.timestamp).toLocaleString('ko-KR')}
                         </p>
                       )}
@@ -129,19 +129,19 @@ export default function SellerDeliveryPage() {
 
   return (
     <SidebarLayout>
-      <div className="min-h-screen bg-purple-50">
+      <div className="min-h-screen bg-[#F8FAFC]">
         <div className="max-w-7xl mx-auto px-6 py-8">
           {/* Stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-7">
             {[
-              { label: '전체',    value: deliveries.length,                                          bg: 'bg-purple-50 border-purple-200 text-purple-700' },
-              { label: '이동중',  value: countStatus('IN_TRANSIT') + countStatus('OUT_FOR_DELIVERY'), bg: 'bg-blue-50 border-blue-200 text-blue-700' },
-              { label: '배송 완료', value: countStatus('DELIVERED'),                                  bg: 'bg-green-50 border-green-200 text-green-700' },
-              { label: '배송 실패', value: countStatus('FAILED'),                                     bg: 'bg-red-50 border-red-200 text-red-700' },
+              { label: '전체',    value: deliveries.length },
+              { label: '이동중',  value: countStatus('IN_TRANSIT') + countStatus('OUT_FOR_DELIVERY') },
+              { label: '배송 완료', value: countStatus('DELIVERED') },
+              { label: '배송 실패', value: countStatus('FAILED') },
             ].map((s) => (
-              <div key={s.label} className={`rounded-xl border p-4 ${s.bg}`}>
-                <p className="text-sm font-medium opacity-80">{s.label}</p>
-                <p className="text-3xl font-bold mt-1">{s.value}</p>
+              <div key={s.label} className="bg-white rounded-lg border border-[#E2E8F0] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
+                <p className="text-sm font-medium" style={{ color: '#64748B' }}>{s.label}</p>
+                <p className="text-3xl font-bold mt-1" style={{ color: '#0F172A' }}>{s.value}</p>
               </div>
             ))}
           </div>
@@ -150,75 +150,75 @@ export default function SellerDeliveryPage() {
           <div className="flex flex-wrap items-center gap-2 mb-5">
             <button
               onClick={() => setShowMap((v) => !v)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+              className={`px-3 py-1.5 rounded-[6px] text-sm font-medium border transition-colors ${
                 showMap
-                  ? 'bg-purple-700 text-white border-purple-700'
-                  : 'bg-white text-purple-700 border-purple-300 hover:bg-purple-50'
-              }`}
+                  ? 'bg-[#2563EB] text-white border-[#2563EB]'
+                  : 'bg-white border-[#E2E8F0] hover:bg-[#F8FAFC]'
+              }`} style={showMap ? {} : { color: '#374151' }}
             >
               🗺️ {showMap ? '지도 숨기기' : '지도 보기'}
             </button>
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-300">
+              className="px-3 py-1.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB]">
               <option value="">전체 상태</option>
               {Object.keys(STATUS_META).map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
             </select>
             <input type="text" placeholder="운송장번호 또는 주문번호 검색" value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-60" />
-            <span className="text-xs text-gray-400 ml-2">운송장번호 클릭 시 상세 추적</span>
+              className="px-3 py-1.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] w-60" />
+            <span className="text-xs" style={{ color: '#94A3B8' }}>운송장번호 클릭 시 상세 추적</span>
           </div>
 
           {/* Map */}
           {showMap && (
-            <div className="mb-5 rounded-xl overflow-hidden border border-purple-100 shadow-sm" style={{ height: 400 }}>
+            <div className="mb-5 rounded-lg overflow-hidden border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.06)]" style={{ height: 400 }}>
               <DeliveryMap deliveries={filtered} height={400} />
             </div>
           )}
 
           {/* Table */}
-          <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-purple-100">
+          <div className="bg-white rounded-lg border border-[#E2E8F0] overflow-x-auto shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
             <table className="w-full text-sm">
-              <thead className="bg-purple-700 text-white">
+              <thead className="bg-[#F8FAFC]">
                 <tr>
                   {['주문번호', '수신자', '주소', '택배사', '운송장번호', '상태', '예상배송일', '실제배송일'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide whitespace-nowrap border-b border-[#E2E8F0]" style={{ color: '#64748B' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center py-10 text-gray-400">배송 데이터가 없습니다.</td></tr>
+                  <tr><td colSpan={8} className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>배송 데이터가 없습니다.</td></tr>
                 ) : (
                   filtered.map((d) => (
                     <tr key={d.id}
-                      className={`border-t border-gray-100 hover:bg-purple-50 transition-colors ${isDelayed(d) ? 'bg-red-50' : ''}`}>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">{d.order_number}</td>
-                      <td className="px-4 py-3 font-medium text-gray-800">{d.receiver_name}</td>
-                      <td className="px-4 py-3 text-gray-500 max-w-[160px] truncate">{d.receiver_address}</td>
+                      className={`border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors ${isDelayed(d) ? 'bg-[#FEF2F2]' : ''}`}>
+                      <td className="px-4 py-3 font-mono text-xs whitespace-nowrap" style={{ color: '#374151' }}>{d.order_number}</td>
+                      <td className="px-4 py-3 font-medium" style={{ color: '#0F172A' }}>{d.receiver_name}</td>
+                      <td className="px-4 py-3 max-w-[160px] truncate" style={{ color: '#64748B' }}>{d.receiver_address}</td>
                       <td className="px-4 py-3"><CarrierBadge carrier={d.carrier} /></td>
                       <td className="px-4 py-3 font-mono text-xs">
                         <button
                           onClick={() => setTrackingModal(d.tracking_number)}
-                          className="text-purple-600 hover:underline hover:text-purple-800 transition-colors">
+                          className="hover:underline transition-colors font-semibold" style={{ color: '#2563EB' }}>
                           {d.tracking_number}
                         </button>
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={d.status} />
                         {isDelayed(d) && (
-                          <span className="ml-1 px-1.5 py-0.5 rounded text-xs bg-red-200 text-red-700 font-semibold">지연</span>
+                          <span className="ml-1 px-1.5 py-0.5 rounded text-xs bg-[#FEE2E2] text-[#991B1B] font-semibold">지연</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{d.estimated_delivery || '—'}</td>
-                      <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{d.actual_delivery || '—'}</td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#64748B' }}>{d.estimated_delivery || '—'}</td>
+                      <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#64748B' }}>{d.actual_delivery || '—'}</td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-gray-400 mt-2">총 {filtered.length}건</p>
+          <p className="text-xs mt-2" style={{ color: '#94A3B8' }}>총 {filtered.length}건</p>
         </div>
 
         {trackingModal && (

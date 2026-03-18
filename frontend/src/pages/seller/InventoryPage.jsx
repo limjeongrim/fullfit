@@ -3,14 +3,14 @@ import api from '../../api/axiosInstance'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
 
 function ExpiryBadge({ days }) {
-  if (days <= 30) return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700">만료임박</span>
-  if (days <= 60) return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700">주의</span>
-  return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">정상</span>
+  if (days <= 30) return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[#FEE2E2] text-[#991B1B]">만료임박</span>
+  if (days <= 60) return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[#FEF9C3] text-[#854D0E]">주의</span>
+  return <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-[#DCFCE7] text-[#166534]">정상</span>
 }
 
 function DaysCell({ days }) {
-  const cls = days <= 30 ? 'text-red-600 font-semibold' : days <= 60 ? 'text-yellow-600 font-semibold' : 'text-green-700'
-  return <span className={cls}>{days}일</span>
+  const color = days <= 30 ? '#991B1B' : days <= 60 ? '#854D0E' : '#166534'
+  return <span className="font-semibold" style={{ color }}>{days}일</span>
 }
 
 const STORAGE_LABEL = { ROOM_TEMP: '상온', COLD: '냉장' }
@@ -18,11 +18,11 @@ const STORAGE_LABEL = { ROOM_TEMP: '상온', COLD: '냉장' }
 function LiveIndicator() {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="relative flex h-2 w-2">
+      <span className="relative flex h-1.5 w-1.5">
         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
       </span>
-      <span className="text-xs text-green-600 font-medium">실시간</span>
+      <span className="text-xs font-medium" style={{ color: '#64748B' }}>실시간</span>
     </span>
   )
 }
@@ -42,7 +42,7 @@ function LastUpdated({ time }) {
     const id = setInterval(update, 1000)
     return () => clearInterval(id)
   }, [time])
-  return <span className="text-xs text-gray-400">마지막 업데이트: {display}</span>
+  return <span className="text-xs" style={{ color: '#94A3B8' }}>마지막 업데이트: {display}</span>
 }
 
 export default function SellerInventoryPage() {
@@ -81,12 +81,12 @@ export default function SellerInventoryPage() {
 
   return (
     <SidebarLayout>
-      <div className="min-h-screen bg-purple-50">
+      <div className="min-h-screen bg-[#F8FAFC]">
         <div className="px-6 py-6">
           {alertCount > 0 && (
-            <div className="mb-4 flex items-center gap-3 bg-red-50 border border-red-300 text-red-700 rounded-xl px-5 py-3">
+            <div className="mb-4 flex items-center gap-3 bg-[#FEF2F2] border border-[#FECACA] text-[#991B1B] rounded-lg px-5 py-3">
               <span className="text-lg">⚠️</span>
-              <span className="font-semibold">주의: {alertCount}개 상품의 유통기한이 30일 이내입니다</span>
+              <span className="font-semibold text-sm">주의: {alertCount}개 상품의 유통기한이 30일 이내입니다</span>
             </div>
           )}
 
@@ -100,42 +100,42 @@ export default function SellerInventoryPage() {
           <div className="flex flex-wrap items-center gap-3 mb-4">
             {[{ key: 'all', label: '전체' }, { key: 'expiring', label: '만료임박' }, { key: 'cold', label: '냉장보관' }].map(({ key, label }) => (
               <button key={key} onClick={() => setFilter(key)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  filter === key ? 'bg-purple-700 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-purple-50'
-                }`}>
+                className={`px-4 py-1.5 rounded-[6px] text-sm font-medium transition-colors ${
+                  filter === key ? 'bg-[#2563EB] text-white' : 'bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC]'
+                }`} style={filter !== key ? { color: '#374151' } : {}}>
                 {label}
               </button>
             ))}
             <input type="text" placeholder="상품명 또는 SKU 검색" value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-300 w-52" />
+              className="px-3 py-1.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] w-52" />
           </div>
 
           {/* Table */}
-          <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-purple-100">
+          <div className="bg-white rounded-lg border border-[#E2E8F0] overflow-x-auto shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
             <table className="w-full text-sm">
-              <thead className="bg-purple-700 text-white">
+              <thead className="bg-[#F8FAFC]">
                 <tr>
                   {['상품명', 'SKU', 'LOT번호', '유통기한', '남은일수', '수량', '보관방식', '상태'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide whitespace-nowrap border-b border-[#E2E8F0]" style={{ color: '#64748B' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center py-10 text-gray-400">데이터가 없습니다.</td></tr>
+                  <tr><td colSpan={8} className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>데이터가 없습니다.</td></tr>
                 ) : (
                   filtered.map((row) => (
                     <tr key={row.id}
-                      className={`border-t border-gray-100 hover:bg-purple-50 transition-colors ${row.days_until_expiry <= 30 ? 'bg-red-50' : ''}`}>
-                      <td className="px-4 py-3 font-medium text-gray-800">{row.product_name}</td>
-                      <td className="px-4 py-3 text-gray-500">{row.sku}</td>
-                      <td className="px-4 py-3 font-mono text-xs text-gray-600">{row.lot_number}</td>
-                      <td className="px-4 py-3 text-gray-700">{row.expiry_date}</td>
+                      className={`border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors ${row.days_until_expiry <= 30 ? 'bg-[#FEF2F2]' : ''}`}>
+                      <td className="px-4 py-3 font-medium" style={{ color: '#0F172A' }}>{row.product_name}</td>
+                      <td className="px-4 py-3" style={{ color: '#64748B' }}>{row.sku}</td>
+                      <td className="px-4 py-3 font-mono text-xs" style={{ color: '#374151' }}>{row.lot_number}</td>
+                      <td className="px-4 py-3" style={{ color: '#374151' }}>{row.expiry_date}</td>
                       <td className="px-4 py-3"><DaysCell days={row.days_until_expiry} /></td>
-                      <td className="px-4 py-3 text-gray-700">{row.quantity.toLocaleString()}</td>
+                      <td className="px-4 py-3" style={{ color: '#374151' }}>{row.quantity.toLocaleString()}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${row.storage_type === 'COLD' ? 'bg-cyan-100 text-cyan-700' : 'bg-gray-100 text-gray-600'}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${row.storage_type === 'COLD' ? 'bg-[#ECFEFF] text-[#0E7490]' : 'bg-[#F1F5F9] text-[#64748B]'}`}>
                           {STORAGE_LABEL[row.storage_type]}
                         </span>
                       </td>

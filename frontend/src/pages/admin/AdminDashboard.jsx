@@ -20,26 +20,27 @@ const CHANNEL_LABELS = {
   ZIGZAG: '지그재그', CAFE24: '카페24', MANUAL: '수동',
 }
 
-function StatCard({ label, value, color, icon, onClick, linkLabel }) {
-  const map = {
-    blue:   'bg-blue-50 border-blue-200 text-blue-700',
-    yellow: 'bg-yellow-50 border-yellow-200 text-yellow-700',
-    red:    'bg-red-50 border-red-200 text-red-700',
-    orange: 'bg-orange-50 border-orange-200 text-orange-700',
+function StatCard({ label, value, icon, color, onClick }) {
+  const iconCls = {
+    blue:   'text-[#2563EB]',
+    yellow: 'text-[#D97706]',
+    red:    'text-[#DC2626]',
+    orange: 'text-[#D97706]',
+    green:  'text-[#16A34A]',
   }
   return (
     <div
       onClick={onClick}
-      className={`rounded-xl border p-5 ${map[color]} ${onClick ? 'cursor-pointer hover:shadow-md hover:brightness-95 transition-all' : ''}`}
+      className={`bg-white border border-[#E2E8F0] rounded-lg p-5 shadow-[0_1px_3px_rgba(0,0,0,0.06)] ${
+        onClick ? 'cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-shadow' : ''
+      }`}
     >
       <div className="flex items-center justify-between mb-2">
-        <p className="text-sm font-medium opacity-80">{label}</p>
-        <span className="text-2xl">{icon}</span>
+        <p className="text-[13px]" style={{ color: '#64748B' }}>{label}</p>
+        {icon && <span className={`text-[20px] leading-none ${iconCls[color] || 'text-[#94A3B8]'}`}>{icon}</span>}
       </div>
-      <p className="text-4xl font-bold">{value ?? '—'}</p>
-      {onClick && (
-        <p className="text-xs mt-2 opacity-60">→ 바로가기</p>
-      )}
+      <p className="text-[28px] font-bold leading-tight" style={{ color: '#0F172A' }}>{value ?? '—'}</p>
+      {onClick && <p className="text-xs mt-2" style={{ color: '#94A3B8' }}>→ 바로가기</p>}
     </div>
   )
 }
@@ -47,11 +48,11 @@ function StatCard({ label, value, color, icon, onClick, linkLabel }) {
 function LiveIndicator() {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="relative flex h-2 w-2">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#16A34A] opacity-60"></span>
+        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#16A34A]"></span>
       </span>
-      <span className="text-xs text-green-600 font-medium">실시간</span>
+      <span className="text-xs" style={{ color: '#64748B' }}>실시간</span>
     </span>
   )
 }
@@ -71,7 +72,7 @@ function LastUpdated({ time }) {
     const id = setInterval(update, 1000)
     return () => clearInterval(id)
   }, [time])
-  return <span className="text-xs text-gray-400">마지막 업데이트: {display}</span>
+  return <span className="text-xs" style={{ color: '#94A3B8' }}>마지막 업데이트: {display}</span>
 }
 
 export default function AdminDashboard() {
@@ -94,7 +95,6 @@ export default function AdminDashboard() {
     api.get('/sellers/').then((r) => setSellerCount(r.data.length)).catch(() => {})
   }, [tick])
 
-  // Auto-refresh every 10 seconds
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 10000)
     return () => clearInterval(id)
@@ -110,16 +110,18 @@ export default function AdminDashboard() {
 
   return (
     <SidebarLayout>
-      <div className="min-h-screen bg-blue-50">
+      <div className="min-h-screen bg-[#F8FAFC]">
         <div className="px-6 py-6">
           {/* Greeting */}
           <div className="mb-5">
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold text-blue-900">안녕하세요, {user?.full_name}님 (관리자)</h2>
+              <h2 className="text-xl font-bold" style={{ color: '#0F172A' }}>
+                안녕하세요, {user?.full_name}님
+              </h2>
               <LiveIndicator />
             </div>
             <div className="flex items-center justify-between mt-1">
-              <p className="text-blue-600 text-sm">오늘의 풀필먼트 현황을 확인하세요.</p>
+              <p className="text-sm" style={{ color: '#64748B' }}>오늘의 풀필먼트 현황을 확인하세요.</p>
               <LastUpdated time={lastUpdated} />
             </div>
           </div>
@@ -136,8 +138,8 @@ export default function AdminDashboard() {
 
           {/* Charts row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-5">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4">최근 7일 주문량</h3>
+            <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5">
+              <h3 className="text-sm font-semibold mb-4" style={{ color: '#0F172A' }}>최근 7일 주문량</h3>
               {stats ? (
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={stats.weekly_orders} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
@@ -145,16 +147,16 @@ export default function AdminDashboard() {
                     <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fontSize: 11 }} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                     <Tooltip formatter={(v) => [v, '주문수']} labelFormatter={(l) => `날짜: ${l}`} />
-                    <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="count" fill="#2563EB" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-[220px] flex items-center justify-center text-gray-300 text-sm">로딩 중...</div>
+                <div className="h-[220px] flex items-center justify-center text-sm" style={{ color: '#94A3B8' }}>로딩 중...</div>
               )}
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-5">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4">채널별 주문 비율</h3>
+            <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5">
+              <h3 className="text-sm font-semibold mb-4" style={{ color: '#0F172A' }}>채널별 주문 비율</h3>
               {stats && pieData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
@@ -172,7 +174,7 @@ export default function AdminDashboard() {
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-[220px] flex items-center justify-center text-gray-300 text-sm">데이터 없음</div>
+                <div className="h-[220px] flex items-center justify-center text-sm" style={{ color: '#94A3B8' }}>데이터 없음</div>
               )}
             </div>
           </div>

@@ -60,26 +60,26 @@ export default function InboundPage() {
     }
   }
 
-  const INPUT_CLS = "w-full px-4 py-4 border-2 border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-400 bg-white"
-  const LABEL_CLS = "block text-base font-semibold text-gray-700 mb-2"
+  const INPUT_CLS = "w-full px-4 py-4 border-2 border-[#E2E8F0] rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] bg-white"
+  const LABEL_CLS = "block text-base font-semibold mb-2"
 
   return (
     <SidebarLayout>
-      <div className="min-h-screen bg-green-50">
+      <div className="min-h-screen bg-[#F8FAFC]">
         <div className="max-w-2xl mx-auto px-4 py-6">
           {/* Form card */}
-          <div className="bg-white rounded-2xl shadow-sm border-2 border-green-100 p-6 mb-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-5">입고 정보 입력</h3>
+          <div className="bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.06)] border border-[#E2E8F0] p-6 mb-6">
+            <h3 className="text-xl font-bold mb-5" style={{ color: '#0F172A' }}>입고 정보 입력</h3>
 
             {formError && (
-              <div className="mb-5 rounded-xl px-4 py-4 text-base font-medium border-2 bg-red-50 border-red-200 text-red-600">
+              <div className="mb-5 rounded-lg px-4 py-4 text-base font-medium bg-[#FEE2E2] border border-[#FECACA] text-[#991B1B]">
                 ⚠️ {formError}
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className={LABEL_CLS}>상품 선택 *</label>
+                <label className={LABEL_CLS} style={{ color: '#374151' }}>상품 선택 *</label>
                 <select name="product_id" value={form.product_id} onChange={handleChange}
                   className={INPUT_CLS} style={{ fontSize: '16px' }}>
                   <option value="">상품을 선택하세요</option>
@@ -90,7 +90,7 @@ export default function InboundPage() {
               </div>
 
               <div>
-                <label className={LABEL_CLS}>LOT번호 *</label>
+                <label className={LABEL_CLS} style={{ color: '#374151' }}>LOT번호 *</label>
                 <input type="text" name="lot_number" value={form.lot_number} onChange={handleChange}
                   placeholder="예: LOT-2026-001"
                   inputMode="text"
@@ -98,13 +98,13 @@ export default function InboundPage() {
               </div>
 
               <div>
-                <label className={LABEL_CLS}>유통기한 *</label>
+                <label className={LABEL_CLS} style={{ color: '#374151' }}>유통기한 *</label>
                 <input type="date" name="expiry_date" value={form.expiry_date} onChange={handleChange}
                   className={INPUT_CLS} style={{ fontSize: '16px' }} />
               </div>
 
               <div>
-                <label className={LABEL_CLS}>수량 *</label>
+                <label className={LABEL_CLS} style={{ color: '#374151' }}>수량 *</label>
                 <input type="number" name="quantity" value={form.quantity} onChange={handleChange}
                   min={1} placeholder="0"
                   inputMode="numeric"
@@ -112,39 +112,39 @@ export default function InboundPage() {
               </div>
 
               <div>
-                <label className={LABEL_CLS}>메모 <span className="text-gray-400 font-normal text-sm">(선택)</span></label>
+                <label className={LABEL_CLS} style={{ color: '#374151' }}>메모 <span className="font-normal text-sm" style={{ color: '#94A3B8' }}>(선택)</span></label>
                 <textarea name="note" value={form.note} onChange={handleChange} rows={3}
                   placeholder="입고 메모를 입력하세요"
                   className={`${INPUT_CLS} resize-none`} style={{ fontSize: '16px' }} />
               </div>
 
               <button type="submit" disabled={submitting}
-                className="w-full bg-green-700 hover:bg-green-800 active:bg-green-900 text-white py-5 rounded-xl text-lg font-bold transition-colors disabled:opacity-50 mt-2">
+                className="w-full bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white py-5 rounded-xl text-lg font-bold transition-colors disabled:opacity-50 mt-2">
                 {submitting ? '등록 중...' : '📥 입고 등록'}
               </button>
             </form>
           </div>
 
-          {/* Recent history — card layout */}
-          <div className="bg-white rounded-2xl shadow-sm border-2 border-green-100 p-5">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">최근 입고 이력 (최대 10건)</h3>
+          {/* Recent history */}
+          <div className="bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.06)] border border-[#E2E8F0] p-5">
+            <h3 className="text-lg font-bold mb-4" style={{ color: '#0F172A' }}>최근 입고 이력 (최대 10건)</h3>
             {inventory.length === 0 ? (
-              <p className="text-center py-6 text-gray-400">입고 이력이 없습니다.</p>
+              <p className="text-center py-6 text-sm" style={{ color: '#94A3B8' }}>입고 이력이 없습니다.</p>
             ) : (
               <div className="flex flex-col gap-3">
                 {inventory.map((inv) => (
                   <div key={inv.id}
-                    className="bg-green-50 rounded-xl p-4 border border-green-100">
+                    className="bg-[#F8FAFC] rounded-lg p-4 border border-[#E2E8F0]">
                     <div className="flex items-start justify-between">
                       <div>
-                        <p className="font-bold text-gray-800 text-base">{inv.product_name}</p>
-                        <p className="font-mono text-xs text-gray-500 mt-0.5">{inv.lot_number}</p>
+                        <p className="font-bold text-base" style={{ color: '#0F172A' }}>{inv.product_name}</p>
+                        <p className="font-mono text-xs mt-0.5" style={{ color: '#64748B' }}>{inv.lot_number}</p>
                       </div>
-                      <span className="text-base font-bold text-green-700">+{inv.quantity.toLocaleString()}개</span>
+                      <span className="text-base font-bold" style={{ color: '#166534' }}>+{inv.quantity.toLocaleString()}개</span>
                     </div>
-                    <div className="flex items-center gap-3 mt-2 text-sm text-gray-500">
+                    <div className="flex items-center gap-3 mt-2 text-sm" style={{ color: '#64748B' }}>
                       <span>유통기한: {inv.expiry_date}</span>
-                      <span className="text-gray-300">|</span>
+                      <span style={{ color: '#CBD5E1' }}>|</span>
                       <span>입고일: {inv.inbound_date || '—'}</span>
                     </div>
                   </div>

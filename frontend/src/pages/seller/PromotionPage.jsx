@@ -3,11 +3,11 @@ import api from '../../api/axiosInstance'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
 
 const CHANNEL_META = {
-  SMARTSTORE: { label: '스마트스토어', cls: 'bg-green-100 text-green-700' },
-  CAFE24:     { label: '카페24',       cls: 'bg-blue-100 text-blue-700' },
-  OLIVEYOUNG: { label: '올리브영',     cls: 'bg-orange-100 text-orange-700' },
-  ZIGZAG:     { label: '지그재그',     cls: 'bg-pink-100 text-pink-700' },
-  ALL:        { label: '전체 채널',    cls: 'bg-purple-100 text-purple-700' },
+  SMARTSTORE: { label: '스마트스토어', cls: 'bg-[#DCFCE7] text-[#166534]' },
+  CAFE24:     { label: '카페24',       cls: 'bg-[#DBEAFE] text-[#1D4ED8]' },
+  OLIVEYOUNG: { label: '올리브영',     cls: 'bg-[#FEF3C7] text-[#92400E]' },
+  ZIGZAG:     { label: '지그재그',     cls: 'bg-[#FDF4FF] text-[#7E22CE]' },
+  ALL:        { label: '전체 채널',    cls: 'bg-[#F1F5F9] text-[#64748B]' },
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
@@ -40,9 +40,9 @@ function CalendarGrid({ year, month, promotions }) {
     promotions.filter(p => p.start_date <= dateStr(d) && p.end_date >= dateStr(d))
 
   return (
-    <div className="grid grid-cols-7 gap-px bg-gray-200 rounded-lg overflow-hidden border border-gray-200">
+    <div className="grid grid-cols-7 gap-px bg-[#E2E8F0] rounded-lg overflow-hidden border border-[#E2E8F0]">
       {WEEKDAYS.map(w => (
-        <div key={w} className={`bg-gray-50 text-center text-xs font-semibold py-2 ${w === '일' ? 'text-red-500' : w === '토' ? 'text-blue-500' : 'text-gray-600'}`}>{w}</div>
+        <div key={w} className={`bg-[#F8FAFC] text-center text-xs font-semibold py-2 ${w === '일' ? 'text-[#DC2626]' : w === '토' ? 'text-[#2563EB]' : ''}`} style={w !== '일' && w !== '토' ? { color: '#64748B' } : {}}>{w}</div>
       ))}
       {cells.map((d, i) => {
         if (!d) return <div key={`e-${i}`} className="bg-white min-h-[60px]" />
@@ -51,15 +51,16 @@ function CalendarGrid({ year, month, promotions }) {
         const isToday = ds === today
         const col = (firstDay + d - 1) % 7
         return (
-          <div key={d} className={`bg-white min-h-[60px] p-1 ${isToday ? 'bg-purple-50' : ''}`}>
+          <div key={d} className={`bg-white min-h-[60px] p-1 ${isToday ? 'bg-[#EFF6FF]' : ''}`}>
             <span className={`text-xs font-semibold inline-flex w-6 h-6 items-center justify-center rounded-full
-              ${isToday ? 'bg-purple-600 text-white' : col === 0 ? 'text-red-500' : col === 6 ? 'text-blue-500' : 'text-gray-700'}`}>
+              ${isToday ? 'bg-[#2563EB] text-white' : col === 0 ? 'text-[#DC2626]' : col === 6 ? 'text-[#2563EB]' : ''}`}
+              style={!isToday && col !== 0 && col !== 6 ? { color: '#374151' } : {}}>
               {d}
             </span>
             <div className="mt-0.5 space-y-0.5">
               {promos.map(p => (
                 <div key={p.id}
-                  className={`text-[9px] px-1 py-0.5 rounded font-medium truncate leading-tight ${CHANNEL_META[p.channel]?.cls || 'bg-gray-100 text-gray-700'}`}>
+                  className={`text-[9px] px-1 py-0.5 rounded font-medium truncate leading-tight ${CHANNEL_META[p.channel]?.cls || 'bg-[#F1F5F9] text-[#64748B]'}`}>
                   {p.name}
                 </div>
               ))}
@@ -95,29 +96,30 @@ export default function SellerPromotionPage() {
 
   return (
     <SidebarLayout>
-      <div className="min-h-screen bg-purple-50">
+      <div className="min-h-screen bg-[#F8FAFC]">
         <div className="max-w-6xl mx-auto px-6 py-8">
           <div className="mb-7">
-            <h2 className="text-2xl font-bold text-purple-900">프로모션 캘린더</h2>
-            <p className="text-purple-600 mt-1 text-sm">채널별 프로모션 일정과 내 상품 수요 예측을 확인하세요.</p>
+            <h2 className="text-2xl font-bold" style={{ color: '#0F172A' }}>프로모션 캘린더</h2>
+            <p className="mt-1 text-sm" style={{ color: '#64748B' }}>채널별 프로모션 일정과 내 상품 수요 예측을 확인하세요.</p>
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 mb-6 bg-white rounded-xl border border-purple-100 p-1 w-fit">
+          <div className="flex gap-1 mb-6 bg-white rounded-lg border border-[#E2E8F0] p-1 w-fit shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
             {[['calendar', '📅 캘린더'], ['list', '📋 목록'], [`alerts`, `⚠️ 수요 알림 ${alerts.length > 0 ? `(${alerts.length})` : ''}`]].map(([k, v]) => (
               <button key={k} onClick={() => setActiveTab(k)}
-                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === k ? 'bg-purple-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+                className={`px-4 py-1.5 rounded-[6px] text-sm font-medium transition-colors ${activeTab === k ? 'bg-[#2563EB] text-white' : 'hover:bg-[#F8FAFC]'}`}
+                style={activeTab !== k ? { color: '#374151' } : {}}>
                 {v}
               </button>
             ))}
           </div>
 
           {activeTab === 'calendar' && (
-            <div className="bg-white rounded-xl shadow-sm border border-purple-100 p-5">
+            <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5">
               <div className="flex items-center justify-between mb-4">
-                <button onClick={prevMonth} className="px-3 py-1 rounded-lg hover:bg-gray-100 text-gray-600">‹</button>
-                <h3 className="text-lg font-bold text-gray-800">{calYear}년 {MONTH_NAMES[calMonth]}</h3>
-                <button onClick={nextMonth} className="px-3 py-1 rounded-lg hover:bg-gray-100 text-gray-600">›</button>
+                <button onClick={prevMonth} className="px-3 py-1 rounded-lg hover:bg-[#F8FAFC] transition-colors" style={{ color: '#64748B' }}>‹</button>
+                <h3 className="text-lg font-bold" style={{ color: '#0F172A' }}>{calYear}년 {MONTH_NAMES[calMonth]}</h3>
+                <button onClick={nextMonth} className="px-3 py-1 rounded-lg hover:bg-[#F8FAFC] transition-colors" style={{ color: '#64748B' }}>›</button>
               </div>
               <CalendarGrid year={calYear} month={calMonth} promotions={promotions} />
               <div className="flex flex-wrap gap-3 mt-4">
@@ -129,43 +131,43 @@ export default function SellerPromotionPage() {
           )}
 
           {activeTab === 'list' && (
-            <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-x-auto">
+            <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.06)] overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-purple-700 text-white">
+                <thead className="bg-[#F8FAFC]">
                   <tr>
                     {['프로모션명', '채널', '시작일', '종료일', '배수', 'D-Day', '상태'].map(h => (
-                      <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
+                      <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide whitespace-nowrap border-b border-[#E2E8F0]" style={{ color: '#64748B' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {promotions.length === 0 ? (
-                    <tr><td colSpan={7} className="text-center py-10 text-gray-400">프로모션이 없습니다.</td></tr>
+                    <tr><td colSpan={7} className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>프로모션이 없습니다.</td></tr>
                   ) : (
                     promotions.map(p => {
                       const dd = dDay(p.start_date)
                       const active = isActive(p)
                       return (
-                        <tr key={p.id} className={`border-t border-gray-100 hover:bg-gray-50 ${active ? 'bg-yellow-50' : ''}`}>
-                          <td className="px-4 py-3 font-medium text-gray-800">{p.name}</td>
+                        <tr key={p.id} className={`border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors ${active ? 'bg-[#FEFCE8]' : ''}`}>
+                          <td className="px-4 py-3 font-medium" style={{ color: '#0F172A' }}>{p.name}</td>
                           <td className="px-4 py-3">
                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${CHANNEL_META[p.channel]?.cls}`}>
                               {CHANNEL_META[p.channel]?.label}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{p.start_date}</td>
-                          <td className="px-4 py-3 text-gray-600 text-xs whitespace-nowrap">{p.end_date}</td>
-                          <td className="px-4 py-3 font-semibold text-purple-700">×{p.expected_order_multiplier}</td>
+                          <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#64748B' }}>{p.start_date}</td>
+                          <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#64748B' }}>{p.end_date}</td>
+                          <td className="px-4 py-3 font-semibold" style={{ color: '#2563EB' }}>×{p.expected_order_multiplier}</td>
                           <td className="px-4 py-3">
                             {active
-                              ? <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-200 text-yellow-800 font-bold">진행중</span>
+                              ? <span className="px-2 py-0.5 rounded-full text-xs bg-[#FEF9C3] text-[#854D0E] font-bold">진행중</span>
                               : dd
-                              ? <span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 font-semibold">{dd}</span>
-                              : <span className="text-gray-400 text-xs">종료</span>
+                              ? <span className="px-2 py-0.5 rounded-full text-xs bg-[#DBEAFE] text-[#1D4ED8] font-semibold">{dd}</span>
+                              : <span className="text-xs" style={{ color: '#CBD5E1' }}>종료</span>
                             }
                           </td>
                           <td className="px-4 py-3">
-                            {active && <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">활성</span>}
+                            {active && <span className="px-2 py-0.5 rounded-full text-xs bg-[#DCFCE7] text-[#166534]">활성</span>}
                           </td>
                         </tr>
                       )
@@ -179,27 +181,27 @@ export default function SellerPromotionPage() {
           {activeTab === 'alerts' && (
             <div className="space-y-3">
               {alerts.length === 0 ? (
-                <div className="bg-white rounded-xl border border-purple-100 p-10 text-center text-gray-400">
+                <div className="bg-white rounded-lg border border-[#E2E8F0] p-10 text-center text-sm" style={{ color: '#94A3B8' }}>
                   향후 30일 내 수요 알림이 없습니다.
                 </div>
               ) : (
                 alerts.map((a, i) => (
-                  <div key={i} className="bg-white rounded-xl border-l-4 border-orange-400 shadow-sm p-5">
+                  <div key={i} className="bg-white rounded-lg border-l-4 border-[#EA580C] border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5">
                     <div className="flex items-start justify-between">
                       <div>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-orange-500 font-bold text-sm">⚠️ 재고 부족 예상</span>
+                          <span className="font-bold text-sm" style={{ color: '#EA580C' }}>⚠️ 재고 부족 예상</span>
                           <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${CHANNEL_META[a.channel]?.cls}`}>
                             {CHANNEL_META[a.channel]?.label}
                           </span>
                         </div>
-                        <p className="font-semibold text-gray-800">{a.product_name} <span className="font-mono text-xs text-gray-400">({a.sku})</span></p>
-                        <p className="text-sm text-gray-600 mt-1">프로모션: <span className="font-medium">{a.promotion_name}</span> ({a.start_date} ~ {a.end_date})</p>
+                        <p className="font-semibold" style={{ color: '#0F172A' }}>{a.product_name} <span className="font-mono text-xs" style={{ color: '#94A3B8' }}>({a.sku})</span></p>
+                        <p className="text-sm mt-1" style={{ color: '#64748B' }}>프로모션: <span className="font-medium">{a.promotion_name}</span> ({a.start_date} ~ {a.end_date})</p>
                       </div>
                       <div className="text-right text-sm">
-                        <p className="text-gray-500">현재 재고: <span className="font-bold text-gray-800">{a.current_stock}개</span></p>
-                        <p className="text-orange-600">예상 수요: <span className="font-bold">{a.expected_demand}개</span></p>
-                        <p className="text-red-600 font-bold mt-0.5">부족 예상: {a.shortage}개</p>
+                        <p style={{ color: '#64748B' }}>현재 재고: <span className="font-bold" style={{ color: '#0F172A' }}>{a.current_stock}개</span></p>
+                        <p style={{ color: '#EA580C' }}>예상 수요: <span className="font-bold">{a.expected_demand}개</span></p>
+                        <p className="font-bold mt-0.5" style={{ color: '#DC2626' }}>부족 예상: {a.shortage}개</p>
                       </div>
                     </div>
                   </div>
