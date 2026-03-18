@@ -83,15 +83,47 @@ def list_expiry_alerts(
     return [_to_inv_response(inv) for inv in rows]
 
 
+@router.get("/inventory/inbound/seller", response_model=List[InboundResponse])
+def list_inbound_seller(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.SELLER])),
+):
+    rows = (
+        db.query(Inbound)
+        .join(Product, Inbound.product_id == Product.id)
+        .filter(Product.seller_id == current_user.id)
+        .order_by(Inbound.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    return [
+        InboundResponse(
+            id=r.id,
+            product_id=r.product_id,
+            product_name=r.product.name,
+            lot_number=r.lot_number,
+            expiry_date=r.expiry_date,
+            quantity=r.quantity,
+            inbound_date=r.inbound_date,
+            note=r.note,
+            created_by=r.created_by,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
+
 @router.post("/inventory/inbound", response_model=InboundResponse)
 def register_inbound(
     data: InboundCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.WORKER])),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.WORKER, UserRole.SELLER])),
 ):
     product = db.query(Product).filter(Product.id == data.product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
+    if current_user.role == UserRole.SELLER and product.seller_id != current_user.id:
+        raise HTTPException(status_code=403, detail="자신의 상품만 입고 요청할 수 있습니다.")
 
     # Create inbound record
     inbound = Inbound(

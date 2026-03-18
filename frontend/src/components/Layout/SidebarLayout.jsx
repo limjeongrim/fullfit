@@ -30,7 +30,6 @@ const ADMIN_MENUS = [
   {
     section: '운영',
     items: [
-      { icon: '🔗', label: '채널 연동',      path: '/admin/channel-sync' },
       { icon: '📅', label: '프로모션 캘린더', path: '/admin/promotions' },
       { icon: '💰', label: '정산 관리',      path: '/admin/settlements' },
       { icon: '💬', label: '채팅 관리',      path: '/admin/chat' },
@@ -68,13 +67,15 @@ const SELLER_MENUS = [
     items: [
       { icon: '🔍', label: '재고 조회', path: '/seller/inventory' },
       { icon: '📈', label: '수요 예측', path: '/seller/forecast' },
+      { icon: '📥', label: '입고 요청', path: '/seller/inbound-request' },
     ],
   },
   {
     section: '운영',
     items: [
-      { icon: '↩️', label: '반품 신청',      path: '/seller/returns' },
-      { icon: '🧾', label: '정산 내역',      path: '/seller/settlements' },
+      { icon: '🔗', label: '채널 연동',       path: '/seller/channel-sync' },
+      { icon: '↩️', label: '반품 신청',       path: '/seller/returns' },
+      { icon: '🧾', label: '정산 내역',       path: '/seller/settlements' },
       { icon: '📅', label: '프로모션 캘린더', path: '/seller/promotions' },
     ],
   },
@@ -116,9 +117,11 @@ const PAGE_TITLES = {
   '/seller/deliveries':  '배송 추적',
   '/seller/inventory':   '재고 조회',
   '/seller/forecast':    '수요 예측',
-  '/seller/returns':     '반품 신청',
-  '/seller/settlements': '정산 내역',
-  '/seller/promotions':  '프로모션 캘린더',
+  '/seller/returns':          '반품 신청',
+  '/seller/settlements':      '정산 내역',
+  '/seller/promotions':       '프로모션 캘린더',
+  '/seller/channel-sync':     '채널 연동',
+  '/seller/inbound-request':  '입고 요청',
 }
 
 export default function SidebarLayout({ children }) {

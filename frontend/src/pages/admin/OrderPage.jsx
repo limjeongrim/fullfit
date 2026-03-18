@@ -1,15 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
 
 const STATUS_META = {
-  RECEIVED:  { label: '접수',    cls: 'bg-blue-100 text-blue-700' },
-  PICKING:   { label: '피킹중',  cls: 'bg-yellow-100 text-yellow-700' },
-  PACKED:    { label: '패킹완료', cls: 'bg-orange-100 text-orange-700' },
-  SHIPPED:   { label: '배송중',  cls: 'bg-purple-100 text-purple-700' },
-  DELIVERED: { label: '배송완료', cls: 'bg-green-100 text-green-700' },
-  CANCELLED: { label: '취소',    cls: 'bg-gray-100 text-gray-500' },
+  RECEIVED:  { label: '주문 접수',  cls: 'bg-blue-100 text-blue-700' },
+  PICKING:   { label: '출고 준비중', cls: 'bg-yellow-100 text-yellow-700' },
+  PACKED:    { label: '패킹 완료',  cls: 'bg-orange-100 text-orange-700' },
+  SHIPPED:   { label: '출고 완료',  cls: 'bg-purple-100 text-purple-700' },
+  DELIVERED: { label: '배송 완료',  cls: 'bg-green-100 text-green-700' },
+  CANCELLED: { label: '취소',      cls: 'bg-gray-100 text-gray-500' },
 }
 
 const CHANNEL_META = {
@@ -57,18 +58,52 @@ function StatCard({ label, value, color }) {
   )
 }
 
+function LiveIndicator() {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+      </span>
+      <span className="text-xs text-green-600 font-medium">실시간</span>
+    </span>
+  )
+}
+
+function LastUpdated({ time }) {
+  const [display, setDisplay] = useState('—')
+  useEffect(() => {
+    const update = () => {
+      if (!time) { setDisplay('—'); return }
+      const diff = Math.floor((Date.now() - time) / 1000)
+      if (diff < 10) setDisplay('방금 전')
+      else if (diff < 60) setDisplay(`${diff}초 전`)
+      else if (diff < 3600) setDisplay(`${Math.floor(diff / 60)}분 전`)
+      else setDisplay(new Date(time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))
+    }
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [time])
+  return <span className="text-xs text-gray-400">마지막 업데이트: {display}</span>
+}
+
 export default function AdminOrderPage() {
   const addToast = useToastStore((s) => s.addToast)
-  const fileRef = useRef()
-
+  const [searchParams] = useSearchParams()
   const [orders, setOrders] = useState([])
   const [total, setTotal] = useState(0)
-  const [filterStatus, setFilterStatus] = useState('')
+  const [filterStatus, setFilterStatus] = useState(() => searchParams.get('filter') === 'pending' ? 'RECEIVED' : '')
+  const [filterToday, setFilterToday] = useState(() => searchParams.get('filter') === 'today')
   const [filterChannel, setFilterChannel] = useState('')
   const [filterSeller, setFilterSeller] = useState('')
   const [sellers, setSellers] = useState([])
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState(null)
+  const [tick, setTick] = useState(0)
+  const [notifs, setNotifs] = useState([])
+  const [adminStats, setAdminStats] = useState(null)
 
   const [form, setForm] = useState({
     channel: 'SMARTSTORE', receiver_name: '', receiver_phone: '',
@@ -89,20 +124,34 @@ export default function AdminOrderPage() {
     const res = await api.get(`/orders/?${params}`)
     setOrders(res.data.items)
     setTotal(res.data.total)
+    setLastUpdated(Date.now())
   }
 
   useEffect(() => {
     api.get('/sellers/').then(r => setSellers(r.data)).catch(() => {})
+    api.get('/stats/admin').then(r => setAdminStats(r.data)).catch(() => {})
+    api.get('/notifications/?limit=3').then(r => setNotifs(r.data)).catch(() => {})
   }, [])
 
-  useEffect(() => { fetchOrders() }, [filterStatus, filterChannel, filterSeller, search])
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const displayedOrders = filterToday
+    ? orders.filter(o => o.created_at && o.created_at.slice(0, 10) === todayStr)
+    : orders
+
+  useEffect(() => { fetchOrders() }, [filterStatus, filterChannel, filterSeller, search, tick])
+
+  // Auto-refresh every 10 seconds
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 10000)
+    return () => clearInterval(id)
+  }, [])
 
   const count = (s) => orders.filter((o) => o.status === s).length
   const stats = [
     { label: '전체 주문', value: total, color: 'blue' },
-    { label: '접수', value: count('RECEIVED'), color: 'yellow' },
-    { label: '피킹중', value: count('PICKING'), color: 'yellow' },
-    { label: '배송중', value: count('SHIPPED'), color: 'purple' },
+    { label: '주문 접수', value: count('RECEIVED'), color: 'yellow' },
+    { label: '출고 준비중', value: count('PICKING'), color: 'yellow' },
+    { label: '출고 완료', value: count('SHIPPED'), color: 'purple' },
   ]
 
   const handleStatusChange = async (orderId, newStatus) => {
@@ -146,111 +195,155 @@ export default function AdminOrderPage() {
     }
   }
 
-  const handleCsvUpload = async (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    const fd = new FormData()
-    fd.append('file', file)
-    try {
-      const res = await api.post('/orders/upload', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
-      await fetchOrders()
-      showToast(`CSV 업로드 완료: ${res.data.created}건 등록`)
-    } catch (err) {
-      showToast(err.response?.data?.detail || 'CSV 업로드 실패', 'error')
-    }
-    e.target.value = ''
-  }
+  const packedCount = count('PACKED')
 
   return (
     <SidebarLayout>
       <div className="min-h-screen bg-blue-50">
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="px-6 py-6">
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-7">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
             {stats.map((s) => <StatCard key={s.label} {...s} />)}
           </div>
 
-          {/* Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-            <div className="flex flex-wrap items-center gap-2">
-              <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
-                <option value="">전체 상태</option>
-                {ALL_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
-              </select>
-              <select value={filterChannel} onChange={(e) => setFilterChannel(e.target.value)}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
-                <option value="">전체 채널</option>
-                {ALL_CHANNELS.map((c) => <option key={c} value={c}>{CHANNEL_META[c].label}</option>)}
-              </select>
-              <select value={filterSeller} onChange={(e) => setFilterSeller(e.target.value)}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
-                <option value="">전체 셀러</option>
-                {sellers.map((s) => <option key={s.id} value={s.id}>{s.full_name} ({s.company_name || s.email})</option>)}
-              </select>
-              <input type="text" placeholder="주문번호 또는 수신자 검색" value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-56" />
-            </div>
-            <div className="flex items-center gap-2">
-              <input ref={fileRef} type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" />
-              <button onClick={() => fileRef.current.click()}
-                className="bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                CSV 업로드
-              </button>
-              <button onClick={() => setShowModal(true)}
-                className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors">
-                + 수동 주문 등록
-              </button>
-            </div>
+          {/* Live bar */}
+          <div className="flex items-center justify-between mb-4">
+            <LiveIndicator />
+            <LastUpdated time={lastUpdated} />
           </div>
 
-          {/* Table */}
-          <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-blue-100">
-            <table className="w-full text-sm">
-              <thead className="bg-blue-700 text-white">
-                <tr>
-                  {['주문번호', '채널', '수신자', '주소', '금액', '상태', '주문일시', '액션'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {orders.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center py-10 text-gray-400">주문이 없습니다.</td></tr>
-                ) : (
-                  orders.map((o) => (
-                    <tr key={o.id} className="border-t border-gray-100 hover:bg-blue-50 transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">{o.order_number}</td>
-                      <td className="px-4 py-3"><ChannelBadge channel={o.channel} /></td>
-                      <td className="px-4 py-3 font-medium text-gray-800">{o.receiver_name}</td>
-                      <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate">{o.receiver_address}</td>
-                      <td className="px-4 py-3 text-gray-700 whitespace-nowrap">₩{Number(o.total_amount).toLocaleString()}</td>
-                      <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
-                      <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
-                        {new Date(o.created_at).toLocaleString('ko-KR')}
-                      </td>
-                      <td className="px-4 py-3">
-                        {NEXT_STATUSES[o.status]?.length > 0 ? (
-                          <select defaultValue=""
-                            onChange={(e) => { if (e.target.value) handleStatusChange(o.id, e.target.value); e.target.value = '' }}
-                            className="px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-300">
-                            <option value="">상태변경</option>
-                            {NEXT_STATUSES[o.status].map((s) => (
-                              <option key={s} value={s}>{STATUS_META[s].label}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="text-gray-300 text-xs">—</span>
-                        )}
-                      </td>
+          <div className="flex gap-4 items-start">
+            {/* Main content */}
+            <div className="flex-1 min-w-0">
+              {/* Controls */}
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  {filterToday && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+                      오늘 주문
+                      <button onClick={() => setFilterToday(false)} className="hover:text-blue-900 font-bold">×</button>
+                    </span>
+                  )}
+                  <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                    <option value="">전체 상태</option>
+                    {ALL_STATUSES.map((s) => <option key={s} value={s}>{STATUS_META[s].label}</option>)}
+                  </select>
+                  <select value={filterChannel} onChange={(e) => setFilterChannel(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                    <option value="">전체 채널</option>
+                    {ALL_CHANNELS.map((c) => <option key={c} value={c}>{CHANNEL_META[c].label}</option>)}
+                  </select>
+                  <select value={filterSeller} onChange={(e) => setFilterSeller(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
+                    <option value="">전체 셀러</option>
+                    {sellers.map((s) => <option key={s.id} value={s.id}>{s.full_name} ({s.company_name || s.email})</option>)}
+                  </select>
+                  <input type="text" placeholder="주문번호 또는 수신자 검색" value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 w-56" />
+                </div>
+                <button onClick={() => setShowModal(true)}
+                  className="bg-blue-700 hover:bg-blue-800 text-white px-5 py-2 rounded-lg text-sm font-semibold transition-colors">
+                  + 수동 주문 등록
+                </button>
+              </div>
+
+              {/* Table */}
+              <div className="bg-white rounded-xl shadow-sm overflow-x-auto border border-blue-100">
+                <table className="w-full text-sm">
+                  <thead className="bg-blue-700 text-white">
+                    <tr>
+                      {['주문번호', '채널', '수신자', '주소', '금액', '상태', '주문일시', '액션'].map((h) => (
+                        <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
+                      ))}
                     </tr>
-                  ))
+                  </thead>
+                  <tbody>
+                    {displayedOrders.length === 0 ? (
+                      <tr><td colSpan={8} className="text-center py-10 text-gray-400">주문이 없습니다.</td></tr>
+                    ) : (
+                      displayedOrders.map((o) => (
+                        <tr key={o.id} className="border-t border-gray-100 hover:bg-blue-50 transition-colors">
+                          <td className="px-4 py-3 font-mono text-xs text-gray-700 whitespace-nowrap">{o.order_number}</td>
+                          <td className="px-4 py-3"><ChannelBadge channel={o.channel} /></td>
+                          <td className="px-4 py-3 font-medium text-gray-800">{o.receiver_name}</td>
+                          <td className="px-4 py-3 text-gray-500 max-w-[180px] truncate">{o.receiver_address}</td>
+                          <td className="px-4 py-3 text-gray-700 whitespace-nowrap">₩{Number(o.total_amount).toLocaleString()}</td>
+                          <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
+                          <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                            {new Date(o.created_at).toLocaleString('ko-KR')}
+                          </td>
+                          <td className="px-4 py-3">
+                            {NEXT_STATUSES[o.status]?.length > 0 ? (
+                              <select defaultValue=""
+                                onChange={(e) => { if (e.target.value) handleStatusChange(o.id, e.target.value); e.target.value = '' }}
+                                className="px-2 py-1 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-300">
+                                <option value="">상태변경</option>
+                                {NEXT_STATUSES[o.status].map((s) => (
+                                  <option key={s} value={s}>{STATUS_META[s].label}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="text-gray-300 text-xs">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">총 {filterToday ? displayedOrders.length : total}건{filterToday ? ' (오늘)' : ''}</p>
+            </div>
+
+            {/* Right panel */}
+            <div className="w-72 shrink-0 space-y-3">
+              <div className="bg-white rounded-xl border border-blue-100 p-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">출고 대기</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">패킹 완료 (출고 대기)</span>
+                  <span className={`text-xl font-bold ${packedCount > 0 ? 'text-orange-600' : 'text-gray-400'}`}>{packedCount}건</span>
+                </div>
+                {adminStats && (
+                  <div className="mt-2 flex items-center justify-between border-t border-gray-100 pt-2">
+                    <span className="text-sm text-gray-600">재고 부족 상품</span>
+                    <span className={`text-xl font-bold ${adminStats.low_stock_count > 0 ? 'text-red-600' : 'text-gray-400'}`}>{adminStats.low_stock_count ?? '—'}개</span>
+                  </div>
                 )}
-              </tbody>
-            </table>
+              </div>
+
+              <div className="bg-white rounded-xl border border-blue-100 p-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">최근 알림</p>
+                {notifs.length === 0 ? (
+                  <p className="text-xs text-gray-400">알림이 없습니다.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {notifs.slice(0, 3).map((n, i) => (
+                      <div key={n.id ?? i} className={`text-xs rounded-lg px-3 py-2 ${n.is_read ? 'bg-gray-50 text-gray-500' : 'bg-blue-50 text-blue-700'}`}>
+                        <p className="font-semibold truncate">{n.title}</p>
+                        <p className="truncate opacity-80">{n.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-white rounded-xl border border-blue-100 p-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">채널별 현황</p>
+                {Object.entries(CHANNEL_META).map(([key, meta]) => {
+                  const c = orders.filter(o => o.channel === key).length
+                  if (!c) return null
+                  return (
+                    <div key={key} className="flex items-center justify-between mb-1.5">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${meta.cls}`}>{meta.label}</span>
+                      <span className="text-sm font-medium text-gray-700">{c}건</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
-          <p className="text-xs text-gray-400 mt-2">총 {total}건</p>
         </div>
 
         {/* Manual order modal */}

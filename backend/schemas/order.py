@@ -15,6 +15,7 @@ class OrderItemResponse(BaseModel):
     id: int
     product_id: int
     product_name: str
+    storage_type: str
     quantity: int
     unit_price: Decimal
 
@@ -66,6 +67,7 @@ class OrderListItem(BaseModel):
     receiver_name: str
     receiver_address: str
     total_amount: Decimal
+    items: List[OrderItemResponse] = []
     created_at: datetime
 
     class Config:

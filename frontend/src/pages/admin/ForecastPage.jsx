@@ -17,6 +17,22 @@ function PromoRiskBadge({ risk }) {
   return <span className={`px-2 py-0.5 rounded-full text-xs ${m.cls}`}>{m.label}</span>
 }
 
+function fmtDays(days) {
+  if (days === 999 || days >= 365) return { text: '1년 이상', cls: 'text-gray-400' }
+  if (days >= 180) return { text: '6개월 이상', cls: 'text-green-600' }
+  if (days >= 90)  return { text: '3개월 이상', cls: 'text-green-700' }
+  if (days >= 30)  return { text: `${Math.floor(days / 30)}개월`, cls: 'text-blue-600 font-medium' }
+  if (days >= 14)  return { text: `${days}일`, cls: 'text-yellow-600 font-semibold' }
+  if (days >= 7)   return { text: `${days}일`, cls: 'text-orange-600 font-bold' }
+  return { text: `${days}일`, cls: 'text-red-600 font-bold' }
+}
+
+function fmtForecast(value, avgDailySales) {
+  if (!avgDailySales || avgDailySales === 0) return '데이터 부족'
+  if (value >= 1000) return `약 ${(value / 1000).toFixed(1)}k개`
+  return `약 ${value}개`
+}
+
 function DetailModal({ item, onClose, onInbound }) {
   const shortage = item.promotion_required_stock - item.current_stock
   return (
@@ -93,23 +109,24 @@ export default function AdminForecastPage() {
 
   const chartData = data.slice(0, 10).map(d => ({
     name: d.product_name.length > 8 ? d.product_name.slice(0, 8) + '…' : d.product_name,
-    days: d.days_of_stock === 999 ? 0 : d.days_of_stock,
+    days: d.days_of_stock === 999 || d.days_of_stock >= 365 ? 365 : d.days_of_stock,
     raw: d,
   }))
 
   const getBarColor = (days) => {
     if (days < 7) return '#ef4444'
     if (days < 14) return '#f97316'
+    if (days < 30) return '#eab308'
     return '#3b82f6'
   }
 
   return (
     <SidebarLayout>
       <div className="min-h-screen bg-blue-50">
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="px-6 py-6">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-blue-900">수요 예측 분석</h2>
-            <p className="text-blue-600 mt-1 text-sm">최근 30일 판매 데이터 기반 재고 소진 예측 + 프로모션 리스크 분석</p>
+            <p className="text-blue-600 mt-1 text-sm">최근 30일 평균 판매량 기준 재고 소진 예측 + 프로모션 리스크 분석</p>
           </div>
 
           {highRiskCount > 0 && (
@@ -150,7 +167,8 @@ export default function AdminForecastPage() {
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} unit="일" />
                   <Tooltip formatter={(v, n, props) => {
                     const d = props.payload.raw
-                    return [`${v}일 (재고 ${d.current_stock}개)`, '소진일수']
+                    const fmt = fmtDays(d.days_of_stock)
+                    return [`${fmt.text} (재고 ${d.current_stock}개)`, '소진일수']
                   }} />
                   <Bar dataKey="days" radius={[4, 4, 0, 0]}>
                     {chartData.map((entry, i) => <Cell key={i} fill={getBarColor(entry.days)} />)}
@@ -173,20 +191,21 @@ export default function AdminForecastPage() {
             <table className="w-full text-sm">
               <thead className="bg-blue-700 text-white">
                 <tr>
-                  {['상품명', 'SKU', '현재재고', '일평균판매', '소진일수', '7일예측', '재고상태', '프로모션 리스크', '예정 프로모션'].map(h => (
+                  {['상품명', 'SKU', '현재재고', '일평균판매', '소진일수', '7일예측', '재고상태', '프로모션 리스크', '예정 프로모션', '조치'].map(h => (
                     <th key={h} className="px-4 py-3 text-left font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={9} className="text-center py-10 text-gray-400">로딩 중...</td></tr>
+                  <tr><td colSpan={10} className="text-center py-10 text-gray-400">로딩 중...</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={9} className="text-center py-10 text-gray-400">데이터가 없습니다.</td></tr>
+                  <tr><td colSpan={10} className="text-center py-10 text-gray-400">데이터가 없습니다.</td></tr>
                 ) : (
                   filtered.map(d => {
                     const isCritical = d.days_of_stock < 7 && d.days_of_stock !== 999
                     const isWarn = d.reorder_recommended && !isCritical
+                    const daysFmt = fmtDays(d.days_of_stock)
                     return (
                       <tr key={d.product_id}
                         onClick={() => d.promotion_risk === 'HIGH' && setDetailItem(d)}
@@ -198,11 +217,13 @@ export default function AdminForecastPage() {
                         <td className="px-4 py-3 font-medium text-gray-800">{d.product_name}</td>
                         <td className="px-4 py-3 font-mono text-xs text-gray-500">{d.sku}</td>
                         <td className="px-4 py-3 font-semibold">{d.current_stock.toLocaleString()}개</td>
-                        <td className="px-4 py-3 text-gray-600">{d.avg_daily_sales}/일</td>
-                        <td className="px-4 py-3 font-bold text-lg">
-                          {d.days_of_stock === 999 ? <span className="text-gray-400">∞</span> : `${d.days_of_stock}일`}
+                        <td className="px-4 py-3 text-gray-600">
+                          {d.avg_daily_sales > 0 ? `${d.avg_daily_sales}/일` : <span className="text-gray-400">데이터 없음</span>}
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{d.forecast_7day}개</td>
+                        <td className="px-4 py-3 font-bold text-lg">
+                          <span className={daysFmt.cls}>{daysFmt.text}</span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">{fmtForecast(d.forecast_7day, d.avg_daily_sales)}</td>
                         <td className="px-4 py-3">
                           {isCritical
                             ? <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700 font-bold">긴급</span>
@@ -213,6 +234,18 @@ export default function AdminForecastPage() {
                         <td className="px-4 py-3"><PromoRiskBadge risk={d.promotion_risk} /></td>
                         <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
                           {d.upcoming_promotion ? `${d.upcoming_promotion.name} (${d.upcoming_promotion.start_date})` : '—'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {d.promotion_risk === 'HIGH'
+                            ? <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700 font-bold">프로모션 전 입고 필수</span>
+                            : d.days_of_stock < 14 && d.days_of_stock !== 999
+                            ? <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700 font-semibold">긴급 발주 필요</span>
+                            : d.days_of_stock < 30
+                            ? <span className="px-2 py-0.5 rounded-full text-xs bg-orange-100 text-orange-700 font-semibold">2주 내 재입고 필요</span>
+                            : d.days_of_stock < 90
+                            ? <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-700">재입고 검토</span>
+                            : <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-700">안전 재고</span>
+                          }
                         </td>
                       </tr>
                     )

@@ -5,11 +5,11 @@ import DeliveryMap from '../../components/DeliveryMap'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
 
 const STATUS_META = {
-  READY:            { label: '준비',    cls: 'bg-gray-100 text-gray-600' },
-  IN_TRANSIT:       { label: '배송중',  cls: 'bg-blue-100 text-blue-700' },
-  OUT_FOR_DELIVERY: { label: '배달중',  cls: 'bg-orange-100 text-orange-700' },
-  DELIVERED:        { label: '배송완료', cls: 'bg-green-100 text-green-700' },
-  FAILED:           { label: '배송실패', cls: 'bg-red-100 text-red-700' },
+  READY:            { label: '접수 완료', cls: 'bg-gray-100 text-gray-600' },
+  IN_TRANSIT:       { label: '이동중',    cls: 'bg-blue-100 text-blue-700' },
+  OUT_FOR_DELIVERY: { label: '배달 출발', cls: 'bg-orange-100 text-orange-700' },
+  DELIVERED:        { label: '배송 완료', cls: 'bg-green-100 text-green-700' },
+  FAILED:           { label: '배송 실패', cls: 'bg-red-100 text-red-700' },
 }
 
 const CARRIER_META = {
@@ -55,6 +55,36 @@ function StatCard({ label, value, color }) {
   )
 }
 
+function LiveIndicator() {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+      </span>
+      <span className="text-xs text-green-600 font-medium">실시간</span>
+    </span>
+  )
+}
+
+function LastUpdated({ time }) {
+  const [display, setDisplay] = useState('—')
+  useEffect(() => {
+    const update = () => {
+      if (!time) { setDisplay('—'); return }
+      const diff = Math.floor((Date.now() - time) / 1000)
+      if (diff < 10) setDisplay('방금 전')
+      else if (diff < 60) setDisplay(`${diff}초 전`)
+      else if (diff < 3600) setDisplay(`${Math.floor(diff / 60)}분 전`)
+      else setDisplay(new Date(time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))
+    }
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [time])
+  return <span className="text-xs text-gray-400">마지막 업데이트: {display}</span>
+}
+
 function isDelayed(d) {
   if (!d.estimated_delivery) return false
   return (
@@ -78,6 +108,8 @@ export default function AdminDeliveryPage() {
   const [form, setForm] = useState({ order_id: '', carrier: 'CJ', tracking_number: '', estimated_delivery: '', note: '' })
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState(null)
+  const [tick, setTick] = useState(0)
 
   const showToast = (msg, type = 'success') => addToast(type, msg)
 
@@ -86,6 +118,7 @@ export default function AdminDeliveryPage() {
     if (filterSeller) params.set('seller_id', filterSeller)
     const res = await api.get(`/deliveries/?${params}`)
     setDeliveries(res.data)
+    setLastUpdated(Date.now())
   }
 
   const fetchEligibleOrders = async () => {
@@ -103,8 +136,14 @@ export default function AdminDeliveryPage() {
     fetchDeliveries()
     api.get('/sellers/').then(r => setSellers(r.data)).catch(() => {})
   }, [])
-  useEffect(() => { fetchDeliveries() }, [filterSeller])
+  useEffect(() => { fetchDeliveries() }, [filterSeller, tick])
   useEffect(() => { if (deliveries.length >= 0) fetchEligibleOrders() }, [deliveries])
+
+  // Auto-refresh every 10 seconds
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 10000)
+    return () => clearInterval(id)
+  }, [])
 
   const filtered = deliveries.filter((d) => {
     if (filterStatus && d.status !== filterStatus) return false
@@ -120,8 +159,8 @@ export default function AdminDeliveryPage() {
   const delayedCount = deliveries.filter(isDelayed).length
   const stats = [
     { label: '전체 배송', value: deliveries.length, color: 'blue' },
-    { label: '배송중', value: countStatus('IN_TRANSIT') + countStatus('OUT_FOR_DELIVERY'), color: 'purple' },
-    { label: '배송완료', value: countStatus('DELIVERED'), color: 'green' },
+    { label: '이동중', value: countStatus('IN_TRANSIT') + countStatus('OUT_FOR_DELIVERY'), color: 'purple' },
+    { label: '배송 완료', value: countStatus('DELIVERED'), color: 'green' },
     { label: '지연', value: delayedCount, color: 'red' },
   ]
 
@@ -164,14 +203,20 @@ export default function AdminDeliveryPage() {
   return (
     <SidebarLayout>
       <div className="min-h-screen bg-blue-50">
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="px-6 py-6">
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-7">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-5">
             {stats.map((s) => <StatCard key={s.label} {...s} />)}
           </div>
 
+          {/* Live bar */}
+          <div className="flex items-center justify-between mb-4">
+            <LiveIndicator />
+            <LastUpdated time={lastUpdated} />
+          </div>
+
           {/* Controls */}
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div className="flex flex-wrap items-center gap-2">
               <button onClick={() => setShowMap((v) => !v)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
@@ -206,7 +251,7 @@ export default function AdminDeliveryPage() {
 
           {/* Map */}
           {showMap && (
-            <div className="mb-5 rounded-xl overflow-hidden border border-blue-100 shadow-sm" style={{ height: 400 }}>
+            <div className="mb-4 rounded-xl overflow-hidden border border-blue-100 shadow-sm" style={{ height: 400 }}>
               <DeliveryMap deliveries={filtered} height={400} />
             </div>
           )}

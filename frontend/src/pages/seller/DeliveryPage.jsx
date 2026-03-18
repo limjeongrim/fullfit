@@ -4,11 +4,11 @@ import DeliveryMap from '../../components/DeliveryMap'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
 
 const STATUS_META = {
-  READY:            { label: '준비',    cls: 'bg-gray-100 text-gray-600' },
-  IN_TRANSIT:       { label: '배송중',  cls: 'bg-blue-100 text-blue-700' },
-  OUT_FOR_DELIVERY: { label: '배달중',  cls: 'bg-orange-100 text-orange-700' },
-  DELIVERED:        { label: '배송완료', cls: 'bg-green-100 text-green-700' },
-  FAILED:           { label: '배송실패', cls: 'bg-red-100 text-red-700' },
+  READY:            { label: '접수 완료', cls: 'bg-gray-100 text-gray-600' },
+  IN_TRANSIT:       { label: '이동중',    cls: 'bg-blue-100 text-blue-700' },
+  OUT_FOR_DELIVERY: { label: '배달 출발', cls: 'bg-orange-100 text-orange-700' },
+  DELIVERED:        { label: '배송 완료', cls: 'bg-green-100 text-green-700' },
+  FAILED:           { label: '배송 실패', cls: 'bg-red-100 text-red-700' },
 }
 
 const CARRIER_META = {
@@ -74,7 +74,6 @@ function TrackingModal({ tracking, onClose }) {
                 <StatusBadge status={data.current_status} />
               </div>
 
-              {/* Timeline */}
               <div className="space-y-0">
                 {data.timeline.map((step, i) => (
                   <div key={i} className="flex gap-3">
@@ -136,9 +135,9 @@ export default function SellerDeliveryPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-7">
             {[
               { label: '전체',    value: deliveries.length,                                          bg: 'bg-purple-50 border-purple-200 text-purple-700' },
-              { label: '배송중',  value: countStatus('IN_TRANSIT') + countStatus('OUT_FOR_DELIVERY'), bg: 'bg-blue-50 border-blue-200 text-blue-700' },
-              { label: '배송완료', value: countStatus('DELIVERED'),                                  bg: 'bg-green-50 border-green-200 text-green-700' },
-              { label: '배송실패', value: countStatus('FAILED'),                                     bg: 'bg-red-50 border-red-200 text-red-700' },
+              { label: '이동중',  value: countStatus('IN_TRANSIT') + countStatus('OUT_FOR_DELIVERY'), bg: 'bg-blue-50 border-blue-200 text-blue-700' },
+              { label: '배송 완료', value: countStatus('DELIVERED'),                                  bg: 'bg-green-50 border-green-200 text-green-700' },
+              { label: '배송 실패', value: countStatus('FAILED'),                                     bg: 'bg-red-50 border-red-200 text-red-700' },
             ].map((s) => (
               <div key={s.label} className={`rounded-xl border p-4 ${s.bg}`}>
                 <p className="text-sm font-medium opacity-80">{s.label}</p>

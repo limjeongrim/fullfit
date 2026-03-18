@@ -8,6 +8,7 @@ class SyncHistory(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     channel = Column(String, nullable=False)
+    seller_id = Column(Integer, nullable=True)
     synced_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     order_count = Column(Integer, default=0, nullable=False)
     success = Column(Boolean, default=True, nullable=False)

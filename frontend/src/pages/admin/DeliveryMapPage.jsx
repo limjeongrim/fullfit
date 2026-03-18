@@ -4,18 +4,18 @@ import DeliveryMap from '../../components/DeliveryMap'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
 
 const STATUS_META = {
-  READY:            { label: '준비',    cls: 'bg-gray-100 text-gray-600' },
-  IN_TRANSIT:       { label: '배송중',  cls: 'bg-blue-100 text-blue-700' },
-  OUT_FOR_DELIVERY: { label: '배달중',  cls: 'bg-orange-100 text-orange-700' },
-  DELIVERED:        { label: '배송완료', cls: 'bg-green-100 text-green-700' },
-  FAILED:           { label: '배송실패', cls: 'bg-red-100 text-red-700' },
+  READY:            { label: '접수 완료', cls: 'bg-gray-100 text-gray-600' },
+  IN_TRANSIT:       { label: '이동중',    cls: 'bg-blue-100 text-blue-700' },
+  OUT_FOR_DELIVERY: { label: '배달 출발', cls: 'bg-orange-100 text-orange-700' },
+  DELIVERED:        { label: '배송 완료', cls: 'bg-green-100 text-green-700' },
+  FAILED:           { label: '배송 실패', cls: 'bg-red-100 text-red-700' },
 }
 
 const FILTER_OPTIONS = [
   { key: '', label: '전체' },
-  { key: 'IN_TRANSIT', label: '배송중' },
-  { key: 'OUT_FOR_DELIVERY', label: '배달중' },
-  { key: 'DELIVERED', label: '배송완료' },
+  { key: 'IN_TRANSIT', label: '이동중' },
+  { key: 'OUT_FOR_DELIVERY', label: '배달 출발' },
+  { key: 'DELIVERED', label: '배송 완료' },
 ]
 
 export default function DeliveryMapPage() {
@@ -37,9 +37,9 @@ export default function DeliveryMapPage() {
         {/* Stats bar */}
         <div className="bg-white border-b border-blue-100 px-6 py-3 flex flex-wrap gap-4 shrink-0">
           <span className="text-sm font-medium text-gray-700">전체 {deliveries.length}건</span>
-          <span className="text-sm font-medium text-blue-700">배송중 {countStatus('IN_TRANSIT')}건</span>
-          <span className="text-sm font-medium text-orange-600">배달중 {countStatus('OUT_FOR_DELIVERY')}건</span>
-          <span className="text-sm font-medium text-green-600">배송완료 {countStatus('DELIVERED')}건</span>
+          <span className="text-sm font-medium text-blue-700">이동중 {countStatus('IN_TRANSIT')}건</span>
+          <span className="text-sm font-medium text-orange-600">배달 출발 {countStatus('OUT_FOR_DELIVERY')}건</span>
+          <span className="text-sm font-medium text-green-600">배송 완료 {countStatus('DELIVERED')}건</span>
         </div>
 
         <div className="flex flex-1 overflow-hidden">

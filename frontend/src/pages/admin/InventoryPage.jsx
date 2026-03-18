@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
@@ -16,17 +17,55 @@ function DaysCell({ days }) {
 
 const STORAGE_LABEL = { ROOM_TEMP: '상온', COLD: '냉장' }
 
+function LiveIndicator() {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+      </span>
+      <span className="text-xs text-green-600 font-medium">실시간</span>
+    </span>
+  )
+}
+
+function LastUpdated({ time }) {
+  const [display, setDisplay] = useState('—')
+  useEffect(() => {
+    const update = () => {
+      if (!time) { setDisplay('—'); return }
+      const diff = Math.floor((Date.now() - time) / 1000)
+      if (diff < 10) setDisplay('방금 전')
+      else if (diff < 60) setDisplay(`${diff}초 전`)
+      else if (diff < 3600) setDisplay(`${Math.floor(diff / 60)}분 전`)
+      else setDisplay(new Date(time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))
+    }
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [time])
+  return <span className="text-xs text-gray-400">마지막 업데이트: {display}</span>
+}
+
 export default function InventoryPage() {
   const addToast = useToastStore((s) => s.addToast)
+  const [searchParams] = useSearchParams()
 
   const [inventory, setInventory] = useState([])
   const [products, setProducts] = useState([])
-  const [filter, setFilter] = useState('all')
+  const [filter, setFilter] = useState(() => {
+    const f = searchParams.get('filter')
+    if (f === 'expiry_alert') return 'expiring'
+    if (f === 'low_stock') return 'low_stock'
+    return 'all'
+  })
   const [search, setSearch] = useState('')
   const [filterSeller, setFilterSeller] = useState('')
   const [sellers, setSellers] = useState([])
   const [alertCount, setAlertCount] = useState(0)
   const [showModal, setShowModal] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState(null)
+  const [tick, setTick] = useState(0)
 
   const [form, setForm] = useState({ product_id: '', lot_number: '', expiry_date: '', quantity: '', note: '' })
   const [formError, setFormError] = useState('')
@@ -39,6 +78,7 @@ export default function InventoryPage() {
       const res = await api.get(`/inventory/?${params}`)
       setInventory(res.data)
       setAlertCount(res.data.filter((r) => r.days_until_expiry <= 30).length)
+      setLastUpdated(Date.now())
     } catch (e) { console.error(e) }
   }
 
@@ -54,11 +94,18 @@ export default function InventoryPage() {
     fetchProducts()
     api.get('/sellers/').then(r => setSellers(r.data)).catch(() => {})
   }, [])
-  useEffect(() => { fetchInventory() }, [filterSeller])
+  useEffect(() => { fetchInventory() }, [filterSeller, tick])
+
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 30000)
+    return () => clearInterval(id)
+  }, [])
 
   const filtered = inventory.filter((row) => {
     if (filter === 'expiring' && row.days_until_expiry > 30) return false
     if (filter === 'cold' && row.storage_type !== 'COLD') return false
+    if (filter === 'low_stock' && row.quantity >= 50) return false
     if (search) {
       const q = search.toLowerCase()
       if (!row.product_name.toLowerCase().includes(q) && !row.sku.toLowerCase().includes(q)) return false
@@ -99,17 +146,23 @@ export default function InventoryPage() {
   return (
     <SidebarLayout>
       <div className="min-h-screen bg-blue-50">
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="px-6 py-6">
           {alertCount > 0 && (
-            <div className="mb-5 flex items-center gap-3 bg-red-50 border border-red-300 text-red-700 rounded-xl px-5 py-3">
+            <div className="mb-4 flex items-center gap-3 bg-red-50 border border-red-300 text-red-700 rounded-xl px-5 py-3">
               <span className="text-lg">⚠️</span>
               <span className="font-semibold">주의: {alertCount}개 상품의 유통기한이 30일 이내입니다</span>
             </div>
           )}
 
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+          {/* Live bar */}
+          <div className="flex items-center justify-between mb-4">
+            <LiveIndicator />
+            <LastUpdated time={lastUpdated} />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2 flex-wrap">
-              {[{ key: 'all', label: '전체' }, { key: 'expiring', label: '만료임박' }, { key: 'cold', label: '냉장보관' }].map(({ key, label }) => (
+              {[{ key: 'all', label: '전체' }, { key: 'expiring', label: '만료임박' }, { key: 'low_stock', label: '재고부족' }, { key: 'cold', label: '냉장보관' }].map(({ key, label }) => (
                 <button key={key} onClick={() => setFilter(key)}
                   className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     filter === key ? 'bg-blue-700 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-blue-50'

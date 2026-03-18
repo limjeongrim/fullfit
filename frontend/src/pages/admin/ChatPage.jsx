@@ -88,7 +88,8 @@ export default function AdminChatPage() {
   }
 
   const filteredRooms = rooms.filter((r) => {
-    if (filterType && r.room_type !== filterType) return false
+    if (filterType === 'UNREAD' && r.unread_count === 0) return false
+    if (filterType && filterType !== 'UNREAD' && r.room_type !== filterType) return false
     if (search) {
       const q = search.toLowerCase()
       if (
@@ -113,14 +114,19 @@ export default function AdminChatPage() {
                 className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
               <div className="flex gap-1">
-                {['', 'ORDER', 'GENERAL'].map((t) => (
-                  <button key={t}
-                    onClick={() => setFilterType(t)}
+                {[
+                  { key: '',        label: '전체' },
+                  { key: 'ORDER',   label: '주문문의' },
+                  { key: 'GENERAL', label: '일반문의' },
+                  { key: 'UNREAD',  label: `미응답${rooms.filter(r => r.unread_count > 0).length > 0 ? ` (${rooms.filter(r => r.unread_count > 0).length})` : ''}` },
+                ].map(({ key, label }) => (
+                  <button key={key}
+                    onClick={() => setFilterType(key)}
                     className={`flex-1 text-xs py-1 rounded-lg font-medium transition-colors ${
-                      filterType === t ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      filterType === key ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
-                    {t === '' ? '전체' : ROOM_TYPE_LABEL[t]}
+                    {label}
                   </button>
                 ))}
               </div>

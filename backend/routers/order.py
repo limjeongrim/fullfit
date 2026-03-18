@@ -54,6 +54,7 @@ def _order_to_response(order: Order) -> OrderResponse:
                 id=it.id,
                 product_id=it.product_id,
                 product_name=it.product.name,
+                storage_type=it.product.storage_type,
                 quantity=it.quantity,
                 unit_price=it.unit_price,
             )
@@ -75,6 +76,17 @@ def _order_to_list_item(order: Order) -> OrderListItem:
         receiver_name=order.receiver_name,
         receiver_address=order.receiver_address,
         total_amount=order.total_amount,
+        items=[
+            OrderItemResponse(
+                id=it.id,
+                product_id=it.product_id,
+                product_name=it.product.name,
+                storage_type=it.product.storage_type,
+                quantity=it.quantity,
+                unit_price=it.unit_price,
+            )
+            for it in order.items
+        ],
         created_at=order.created_at,
     )
 
@@ -116,7 +128,7 @@ def list_orders(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.WORKER])),
 ):
-    q = db.query(Order).options(joinedload(Order.seller), joinedload(Order.items))
+    q = db.query(Order).options(joinedload(Order.seller), joinedload(Order.items).joinedload(OrderItem.product))
     if status:
         q = q.filter(Order.status == status)
     if channel:
@@ -145,7 +157,7 @@ def list_orders_seller(
 ):
     q = (
         db.query(Order)
-        .options(joinedload(Order.seller), joinedload(Order.items))
+        .options(joinedload(Order.seller), joinedload(Order.items).joinedload(OrderItem.product))
         .filter(Order.seller_id == current_user.id)
     )
     if status:

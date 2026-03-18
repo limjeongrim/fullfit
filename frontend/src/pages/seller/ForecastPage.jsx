@@ -17,6 +17,22 @@ function PromoRiskBadge({ risk }) {
   return <span className={`px-2 py-0.5 rounded-full text-xs ${m.cls}`}>{m.label}</span>
 }
 
+function fmtDays(days) {
+  if (days === 999 || days >= 365) return { text: '1년 이상', cls: 'text-gray-400' }
+  if (days >= 180) return { text: '6개월 이상', cls: 'text-green-600' }
+  if (days >= 90)  return { text: '3개월 이상', cls: 'text-green-700' }
+  if (days >= 30)  return { text: `${Math.floor(days / 30)}개월`, cls: 'text-blue-600 font-medium' }
+  if (days >= 14)  return { text: `${days}일`, cls: 'text-yellow-600 font-semibold' }
+  if (days >= 7)   return { text: `${days}일`, cls: 'text-orange-600 font-bold' }
+  return { text: `${days}일`, cls: 'text-red-600 font-bold' }
+}
+
+function fmtForecast(value, avgDailySales) {
+  if (!avgDailySales || avgDailySales === 0) return '데이터 부족'
+  if (value >= 1000) return `약 ${(value / 1000).toFixed(1)}k개`
+  return `약 ${value}개`
+}
+
 export default function SellerForecastPage() {
   const navigate = useNavigate()
   const [data, setData] = useState([])
@@ -35,26 +51,26 @@ export default function SellerForecastPage() {
 
   const chartData = data.slice(0, 10).map(d => ({
     name: d.product_name.length > 8 ? d.product_name.slice(0, 8) + '…' : d.product_name,
-    days: d.days_of_stock === 999 ? 0 : d.days_of_stock,
+    days: d.days_of_stock === 999 || d.days_of_stock >= 365 ? 365 : d.days_of_stock,
     raw: d,
   }))
 
   const getBarColor = (days) => {
     if (days < 7) return '#ef4444'
-    if (days < 14) return '#a855f7'
+    if (days < 14) return '#f97316'
+    if (days < 30) return '#eab308'
     return '#9333ea'
   }
 
   return (
     <SidebarLayout>
       <div className="min-h-screen bg-purple-50">
-        <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="px-6 py-6">
           <div className="mb-6">
             <h2 className="text-2xl font-bold text-purple-900">수요 예측 분석</h2>
-            <p className="text-purple-600 mt-1 text-sm">최근 30일 판매 데이터 기반 재고 소진 예측</p>
+            <p className="text-purple-600 mt-1 text-sm">최근 30일 평균 판매량 기준 재고 소진 예측</p>
           </div>
 
-          {/* Promotion HIGH risk banner */}
           {highRiskCount > 0 && (
             <div className="mb-5 flex items-center gap-3 bg-red-50 border-2 border-red-300 text-red-700 rounded-xl px-5 py-4">
               <span className="text-xl">⚠️</span>
@@ -64,7 +80,6 @@ export default function SellerForecastPage() {
             </div>
           )}
 
-          {/* Summary cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-xl border border-purple-100 p-4">
               <p className="text-sm text-gray-500 mb-1">내 상품</p>
@@ -84,7 +99,6 @@ export default function SellerForecastPage() {
             </div>
           </div>
 
-          {/* Chart */}
           {chartData.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-purple-100 p-5 mb-6">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">재고 소진일수</h3>
@@ -93,12 +107,11 @@ export default function SellerForecastPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11 }} unit="일" />
-                  <Tooltip
-                    formatter={(v, n, props) => {
-                      const d = props.payload.raw
-                      return [`${v}일 (재고 ${d.current_stock}개)`, '소진일수']
-                    }}
-                  />
+                  <Tooltip formatter={(v, n, props) => {
+                    const d = props.payload.raw
+                    const fmt = fmtDays(d.days_of_stock)
+                    return [`${fmt.text} (재고 ${d.current_stock}개)`, '소진일수']
+                  }} />
                   <Bar dataKey="days" radius={[4, 4, 0, 0]}>
                     {chartData.map((entry, i) => (
                       <Cell key={i} fill={getBarColor(entry.days)} />
@@ -109,7 +122,6 @@ export default function SellerForecastPage() {
             </div>
           )}
 
-          {/* Table */}
           <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-purple-700 text-white">
@@ -128,6 +140,7 @@ export default function SellerForecastPage() {
                   data.map(d => {
                     const isCritical = d.days_of_stock < 7 && d.days_of_stock !== 999
                     const isWarn = d.reorder_recommended && !isCritical
+                    const daysFmt = fmtDays(d.days_of_stock)
                     return (
                       <tr key={d.product_id}
                         className={`border-t border-gray-100 transition-colors ${
@@ -138,11 +151,13 @@ export default function SellerForecastPage() {
                         <td className="px-4 py-3 font-medium text-gray-800">{d.product_name}</td>
                         <td className="px-4 py-3 font-mono text-xs text-gray-500">{d.sku}</td>
                         <td className="px-4 py-3 font-semibold">{d.current_stock.toLocaleString()}개</td>
-                        <td className="px-4 py-3 text-gray-600">{d.avg_daily_sales}/일</td>
-                        <td className="px-4 py-3 font-bold">
-                          {d.days_of_stock === 999 ? <span className="text-gray-400">∞</span> : `${d.days_of_stock}일`}
+                        <td className="px-4 py-3 text-gray-600">
+                          {d.avg_daily_sales > 0 ? `${d.avg_daily_sales}/일` : <span className="text-gray-400">데이터 없음</span>}
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{d.forecast_7day}개</td>
+                        <td className="px-4 py-3 font-bold">
+                          <span className={daysFmt.cls}>{daysFmt.text}</span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">{fmtForecast(d.forecast_7day, d.avg_daily_sales)}</td>
                         <td className="px-4 py-3">
                           {isCritical
                             ? <span className="px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-700 font-bold">긴급</span>
@@ -152,11 +167,11 @@ export default function SellerForecastPage() {
                         </td>
                         <td className="px-4 py-3"><PromoRiskBadge risk={d.promotion_risk} /></td>
                         <td className="px-4 py-3">
-                          {(d.reorder_recommended || d.promotion_risk !== 'LOW') && (
+                          {(isCritical || isWarn || d.promotion_risk !== 'LOW') && (
                             <button
-                              onClick={() => navigate('/seller/inventory')}
+                              onClick={() => navigate('/seller/inbound-request')}
                               className="text-xs px-2 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors whitespace-nowrap">
-                              재고 확인
+                              입고 요청
                             </button>
                           )}
                         </td>

@@ -1,8 +1,8 @@
 import csv
 import io
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from decimal import Decimal
+from fastapi import APIRouter, Depends, UploadFile, File
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models.user import User, UserRole
@@ -24,13 +24,6 @@ def _generate_order_number(db: Session) -> str:
     )
     seq = (int(last.order_number.rsplit("-", 1)[-1]) + 1) if last else 1
     return f"{prefix}{seq:04d}"
-
-
-def _get_default_seller(db: Session) -> User:
-    seller = db.query(User).filter(User.role == UserRole.SELLER).first()
-    if not seller:
-        raise HTTPException(status_code=400, detail="등록된 셀러가 없습니다.")
-    return seller
 
 
 def _sync(db: Session, rows: list[dict], channel: OrderChannel, seller_id: int) -> tuple[int, int, list[str]]:
@@ -60,8 +53,7 @@ def _sync(db: Session, rows: list[dict], channel: OrderChannel, seller_id: int) 
     return created, failed, errors
 
 
-def _parse_and_sync(content: bytes, channel: OrderChannel, field_map: dict, db: Session) -> dict:
-    seller = _get_default_seller(db)
+def _parse_and_sync(content: bytes, channel: OrderChannel, field_map: dict, db: Session, seller_id: int) -> dict:
     text = content.decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(text))
     rows = []
@@ -74,10 +66,11 @@ def _parse_and_sync(content: bytes, channel: OrderChannel, field_map: dict, db: 
         }
         rows.append(mapped)
 
-    created, failed, errors = _sync(db, rows, channel, seller.id)
+    created, failed, errors = _sync(db, rows, channel, seller_id)
 
     history = SyncHistory(
         channel=channel.value,
+        seller_id=seller_id,
         order_count=created,
         success=failed == 0,
         error_message="; ".join(errors) if errors else None,
@@ -101,44 +94,47 @@ ZIGZAG_MAP     = {"receiver_name": "name", "receiver_phone": "phone", "address":
 async def sync_smartstore(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.ADMIN])),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.SELLER])),
 ):
-    return _parse_and_sync(await file.read(), OrderChannel.SMARTSTORE, SMARTSTORE_MAP, db)
+    return _parse_and_sync(await file.read(), OrderChannel.SMARTSTORE, SMARTSTORE_MAP, db, current_user.id)
 
 
 @router.post("/sync/cafe24")
 async def sync_cafe24(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.ADMIN])),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.SELLER])),
 ):
-    return _parse_and_sync(await file.read(), OrderChannel.CAFE24, CAFE24_MAP, db)
+    return _parse_and_sync(await file.read(), OrderChannel.CAFE24, CAFE24_MAP, db, current_user.id)
 
 
 @router.post("/sync/oliveyoung")
 async def sync_oliveyoung(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.ADMIN])),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.SELLER])),
 ):
-    return _parse_and_sync(await file.read(), OrderChannel.OLIVEYOUNG, OLIVEYOUNG_MAP, db)
+    return _parse_and_sync(await file.read(), OrderChannel.OLIVEYOUNG, OLIVEYOUNG_MAP, db, current_user.id)
 
 
 @router.post("/sync/zigzag")
 async def sync_zigzag(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.ADMIN])),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.SELLER])),
 ):
-    return _parse_and_sync(await file.read(), OrderChannel.ZIGZAG, ZIGZAG_MAP, db)
+    return _parse_and_sync(await file.read(), OrderChannel.ZIGZAG, ZIGZAG_MAP, db, current_user.id)
 
 
 @router.get("/sync/history")
 def sync_history(
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role([UserRole.ADMIN])),
+    current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.SELLER])),
 ):
-    rows = db.query(SyncHistory).order_by(SyncHistory.synced_at.desc()).limit(50).all()
+    q = db.query(SyncHistory).order_by(SyncHistory.synced_at.desc())
+    if current_user.role == UserRole.SELLER:
+        q = q.filter(SyncHistory.seller_id == current_user.id)
+    rows = q.limit(50).all()
     return [
         {
             "id": r.id,

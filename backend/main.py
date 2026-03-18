@@ -1,3 +1,6 @@
+import asyncio
+import random
+import time
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from fastapi import FastAPI
@@ -472,9 +475,55 @@ def seed_chat(db):
     print("✅ Seed chat rooms created.")
 
 
+async def order_simulator():
+    """Background task: create 1-2 random orders every 30 seconds for 홍길동 seller."""
+    _NAMES    = ['김민지', '이수진', '박지현', '최유리', '정하나', '한예슬', '오지민', '김예린']
+    _ADDRS    = ['서울 강남구', '부산 해운대구', '경기 성남시', '인천 연수구', '대전 유성구', '대구 수성구']
+    _CHANNELS = [OrderChannel.SMARTSTORE, OrderChannel.OLIVEYOUNG, OrderChannel.ZIGZAG, OrderChannel.CAFE24]
+
+    await asyncio.sleep(10)  # let startup finish first
+    while True:
+        db = SessionLocal()
+        try:
+            seller = db.query(User).filter(User.role == UserRole.SELLER).first()
+            if seller:
+                created = []
+                for _ in range(random.randint(1, 2)):
+                    order_number = f"FF-{datetime.now().strftime('%Y%m%d')}-{int(time.time() * 1000) % 100000:05d}"
+                    amount = random.randint(15, 85) * 1000
+                    db.add(Order(
+                        order_number=order_number,
+                        channel=random.choice(_CHANNELS),
+                        seller_id=seller.id,
+                        status=OrderStatus.RECEIVED,
+                        receiver_name=random.choice(_NAMES),
+                        receiver_phone=f"010-{random.randint(1000,9999)}-{random.randint(1000,9999)}",
+                        receiver_address=random.choice(_ADDRS),
+                        total_amount=Decimal(str(amount)),
+                    ))
+                    created.append(order_number)
+                    await asyncio.sleep(0.01)  # ensure unique ms timestamp per order
+                db.commit()
+                for num in created:
+                    print(f"✅ Auto order created: {num}")
+        except Exception as e:
+            print(f"[simulator] error: {e}")
+        finally:
+            db.close()
+        await asyncio.sleep(30)
+
+
 @app.on_event("startup")
-def startup():
+async def startup():
     Base.metadata.create_all(bind=engine)
+    # Inline migration: add seller_id to sync_histories if missing
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE sync_histories ADD COLUMN seller_id INTEGER"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists
     db = SessionLocal()
     try:
         seed_users(db)
@@ -489,6 +538,7 @@ def startup():
         seed_chat(db)
     finally:
         db.close()
+    asyncio.create_task(order_simulator())
 
 
 @app.get("/")

@@ -28,6 +28,8 @@ import SellerSettlementPage from './pages/seller/SettlementPage'
 import SellerReturnPage from './pages/seller/ReturnPage'
 import SellerPromotionPage from './pages/seller/PromotionPage'
 import SellerForecastPage from './pages/seller/ForecastPage'
+import SellerChannelSyncPage from './pages/seller/ChannelSyncPage'
+import SellerInboundRequestPage from './pages/seller/InboundRequestPage'
 
 export default function App() {
   const loadFromStorage = useAuthStore((s) => s.loadFromStorage)
@@ -91,8 +93,10 @@ export default function App() {
                 <Route path="deliveries"  element={<SellerDeliveryPage />} />
                 <Route path="settlements" element={<SellerSettlementPage />} />
                 <Route path="returns"     element={<SellerReturnPage />} />
-                <Route path="promotions"  element={<SellerPromotionPage />} />
-                <Route path="forecast"    element={<SellerForecastPage />} />
+                <Route path="promotions"      element={<SellerPromotionPage />} />
+                <Route path="forecast"        element={<SellerForecastPage />} />
+                <Route path="channel-sync"    element={<SellerChannelSyncPage />} />
+                <Route path="inbound-request" element={<SellerInboundRequestPage />} />
                 <Route path="*" element={<Navigate to="dashboard" replace />} />
               </Routes>
             </ProtectedRoute>

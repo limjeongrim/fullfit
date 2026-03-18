@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
@@ -18,10 +19,14 @@ const CHANNEL_CLS = {
 
 export default function OutboundPage() {
   const addToast = useToastStore((s) => s.addToast)
-  const [orders, setOrders] = useState([])
+  const navigate = useNavigate()
+  const [packedOrders, setPackedOrders] = useState([])
+  const [shippedToday, setShippedToday] = useState([])
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
+
+  const todayStr = new Date().toISOString().slice(0, 10)
 
   const fetchOrders = async () => {
     setLoading(true)
@@ -30,7 +35,11 @@ export default function OutboundPage() {
       const packed = res.data.items
         .filter((o) => o.status === 'PACKED')
         .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-      setOrders(packed)
+      const shipped = res.data.items
+        .filter((o) => o.status === 'SHIPPED' && o.created_at.slice(0, 10) === todayStr)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      setPackedOrders(packed)
+      setShippedToday(shipped)
     } finally {
       setLoading(false)
     }
@@ -52,17 +61,16 @@ export default function OutboundPage() {
     }
   }
 
-  const confirmOrder = orders.find(o => o.id === confirmId)
+  const confirmOrder = packedOrders.find((o) => o.id === confirmId)
 
   return (
     <SidebarLayout>
       <div className="min-h-screen bg-green-50">
-        {/* Sticky status bar */}
-        <div className="sticky top-14 z-10 bg-white border-b border-green-100 shadow-sm px-5 py-3 flex items-center gap-4">
-          <span className="text-sm font-semibold text-gray-700">출고 대기</span>
-          <span className="px-3 py-1 rounded-full text-sm font-bold bg-orange-100 text-orange-700">
-            {orders.length}건
-          </span>
+        {/* Sticky stats bar */}
+        <div className="sticky top-14 z-10 bg-white border-b border-green-100 shadow-sm px-5 py-3 flex items-center gap-4 text-sm flex-wrap">
+          <span className="font-semibold text-gray-700">출고 현황</span>
+          <span className="px-3 py-1 rounded-full font-bold bg-orange-100 text-orange-700">출고 대기 {packedOrders.length}건</span>
+          <span className="px-3 py-1 rounded-full font-bold bg-green-100 text-green-700">오늘 출고 완료 {shippedToday.length}건</span>
         </div>
 
         <div className="max-w-2xl mx-auto px-4 py-5">
@@ -75,26 +83,31 @@ export default function OutboundPage() {
           {/* Count banner */}
           {!loading && (
             <div className={`mb-4 rounded-2xl px-5 py-3 font-semibold text-base ${
-              orders.length > 0
+              packedOrders.length > 0
                 ? 'bg-orange-50 border-2 border-orange-300 text-orange-800'
                 : 'bg-green-50 border-2 border-green-300 text-green-700'
             }`}>
-              {orders.length > 0
-                ? `📤 ${orders.length}건 출고 대기 중`
+              {packedOrders.length > 0
+                ? `📤 ${packedOrders.length}건 출고 대기 중`
                 : '✅ 출고 대기 주문이 없습니다'}
             </div>
           )}
 
           {loading ? (
             <div className="text-center py-16 text-gray-400 text-lg">로딩 중...</div>
-          ) : orders.length === 0 ? (
+          ) : packedOrders.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
               <div className="text-5xl mb-4">✅</div>
               <p className="text-lg font-semibold">출고 대기 주문이 없습니다</p>
+              <p className="text-sm mt-2 text-gray-400">피킹 중인 주문이 있다면 피킹 페이지를 확인하세요.</p>
+              <button onClick={() => navigate('/worker/picking')}
+                className="mt-4 px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl text-sm font-semibold transition-colors">
+                피킹 페이지로 이동
+              </button>
             </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {orders.map((o) => {
+              {packedOrders.map((o) => {
                 const isActing = acting === o.id
                 return (
                   <div key={o.id}
@@ -128,6 +141,24 @@ export default function OutboundPage() {
                   </div>
                 )
               })}
+            </div>
+          )}
+
+          {/* Completion history */}
+          {shippedToday.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-sm font-semibold text-gray-500 mb-3">오늘 출고 완료 ({shippedToday.length}건)</h3>
+              <div className="flex flex-col gap-2">
+                {shippedToday.map((o) => (
+                  <div key={o.id} className="bg-white rounded-xl border border-green-100 px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <span className="font-mono text-xs text-gray-400">{o.order_number}</span>
+                      <p className="text-sm font-semibold text-gray-700">{o.receiver_name}</p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">출고완료</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

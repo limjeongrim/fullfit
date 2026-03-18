@@ -84,7 +84,7 @@ export default function AdminReturnPage() {
   return (
     <SidebarLayout>
       <div className="min-h-screen bg-blue-50">
-        <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="px-6 py-6">
           <div className="flex items-center gap-2 mb-5">
             <select value={filterSeller} onChange={(e) => setFilterSeller(e.target.value)}
               className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-300">
@@ -148,28 +148,68 @@ export default function AdminReturnPage() {
         {showModal && selected && (
           <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-8">
-              <h3 className="text-lg font-bold text-gray-800 mb-2">
-                {selected.targetStatus === 'RESTOCKED' ? '재입고 처리' :
-                 selected.targetStatus === 'DISPOSED'  ? '폐기 처리'  : '검수 시작'}
-              </h3>
-              <p className="text-sm text-gray-500 mb-5">
-                {selected.targetStatus === 'RESTOCKED' ? '재입고 처리 시 해당 주문 상품 수량이 재고에 반영됩니다.' :
-                 selected.targetStatus === 'DISPOSED'  ? '폐기 처리된 반품은 되돌릴 수 없습니다.' : '반품 검수를 시작합니다.'}
-              </p>
-              <div className="mb-5">
-                <label className="block text-sm font-medium text-gray-700 mb-1">검수 메모 (선택)</label>
-                <textarea value={inspectionNote} onChange={(e) => setInspectionNote(e.target.value)} rows={3}
-                  placeholder="검수 내용을 입력하세요"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">취소</button>
-                <button onClick={handleConfirm} disabled={submitting}
-                  className="flex-1 bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50">
-                  {submitting ? '처리 중...' : '확인'}
-                </button>
-              </div>
+              {selected.targetStatus === 'RESTOCKED' ? (
+                <>
+                  <h3 className="text-lg font-bold text-gray-800 mb-2">재입고 처리 확인</h3>
+                  <p className="text-sm text-gray-500 mb-5">
+                    이 상품을 재입고 처리하시겠습니까? 현재 재고에 수량이 추가됩니다.
+                  </p>
+                  <div className="mb-5">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">검수 메모 <span className="text-gray-400">(선택)</span></label>
+                    <textarea value={inspectionNote} onChange={(e) => setInspectionNote(e.target.value)} rows={3}
+                      placeholder="검수 내용을 입력하세요"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-400 resize-none" />
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => setShowModal(false)}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">취소</button>
+                    <button onClick={handleConfirm} disabled={submitting}
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50">
+                      {submitting ? '처리 중...' : '재입고 확정'}
+                    </button>
+                  </div>
+                </>
+              ) : selected.targetStatus === 'DISPOSED' ? (
+                <>
+                  <h3 className="text-lg font-bold text-gray-800 mb-2">폐기 처리 확인</h3>
+                  <p className="text-sm text-gray-500 mb-5">
+                    이 상품을 폐기 처리하시겠습니까? <span className="font-semibold text-red-600">이 작업은 되돌릴 수 없습니다.</span>
+                  </p>
+                  <div className="mb-5">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">폐기 사유 <span className="text-red-500">*</span></label>
+                    <textarea value={inspectionNote} onChange={(e) => setInspectionNote(e.target.value)} rows={3}
+                      placeholder="폐기 사유를 입력하세요 (필수)"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none" />
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => setShowModal(false)}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">취소</button>
+                    <button onClick={handleConfirm} disabled={submitting || !inspectionNote.trim()}
+                      className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50">
+                      {submitting ? '처리 중...' : '폐기 확정'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-bold text-gray-800 mb-2">검수 시작</h3>
+                  <p className="text-sm text-gray-500 mb-5">반품 검수를 시작합니다.</p>
+                  <div className="mb-5">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">검수 메모 <span className="text-gray-400">(선택)</span></label>
+                    <textarea value={inspectionNote} onChange={(e) => setInspectionNote(e.target.value)} rows={3}
+                      placeholder="검수 내용을 입력하세요"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" />
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => setShowModal(false)}
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">취소</button>
+                    <button onClick={handleConfirm} disabled={submitting}
+                      className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50">
+                      {submitting ? '처리 중...' : '검수 시작'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
