@@ -29,6 +29,8 @@ def _to_response(d: Delivery) -> DeliveryResponse:
         estimated_delivery=d.estimated_delivery,
         actual_delivery=d.actual_delivery,
         note=d.note,
+        delivery_lat=d.delivery_lat,
+        delivery_lng=d.delivery_lng,
         created_at=d.created_at,
         updated_at=d.updated_at,
     )

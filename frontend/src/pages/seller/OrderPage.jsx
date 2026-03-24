@@ -68,6 +68,11 @@ export default function SellerOrderPage() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [tick, setTick] = useState(0)
 
+  const [selectedOrder, setSelectedOrder] = useState(null)
+  const [orderHistory, setOrderHistory] = useState([])
+  const [detailTab, setDetailTab] = useState('info')
+  const [detailLoading, setDetailLoading] = useState(false)
+
   const fetchOrders = async () => {
     try {
       const params = new URLSearchParams()
@@ -82,6 +87,25 @@ export default function SellerOrderPage() {
     } catch (e) { console.error(e) }
   }
 
+  const openOrderDetail = async (order) => {
+    setSelectedOrder(order)
+    setDetailTab('info')
+    setOrderHistory([])
+    setDetailLoading(true)
+    try {
+      const [detRes, histRes] = await Promise.all([
+        api.get(`/orders/${order.id}`),
+        api.get(`/orders/${order.id}/history`),
+      ])
+      setSelectedOrder(detRes.data)
+      setOrderHistory(histRes.data)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
   useEffect(() => { fetchOrders() }, [filterStatus, filterChannel, search, tick])
 
   useEffect(() => {
@@ -90,6 +114,28 @@ export default function SellerOrderPage() {
   }, [])
 
   const count = (s) => orders.filter((o) => o.status === s).length
+
+  const downloadOrderCSV = () => {
+    const esc = (v) => { const s = String(v ?? ''); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s }
+    const headers = ['주문번호','채널','수령인','주소','상품명','수량','금액','상태','주문일시','송장번호']
+    const rows = orders.map(o => [
+      o.order_number,
+      CHANNEL_META[o.channel]?.label || o.channel,
+      o.receiver_name,
+      o.receiver_address,
+      o.items?.map(it => it.product_name).join(' / ') || '',
+      o.items?.map(it => it.quantity).join(' / ') || '',
+      o.total_amount,
+      STATUS_META[o.status]?.label || o.status,
+      new Date(o.created_at).toLocaleString('ko-KR'),
+      o.tracking_number || '',
+    ])
+    const csv = [headers, ...rows].map(r => r.map(esc).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `주문내역_${new Date().toISOString().slice(0,10)}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const channelBreakdown = Object.entries(CHANNEL_META).map(([key, meta]) => ({
     key, label: meta.label, count: orders.filter(o => o.channel === key).length,
@@ -122,8 +168,9 @@ export default function SellerOrderPage() {
               ))}
             </div>
 
-            {/* Filters */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
+            {/* Filters + export */}
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div className="flex flex-wrap items-center gap-2">
               <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
                 className="px-3 py-1.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB]">
                 <option value="">전체 상태</option>
@@ -142,6 +189,11 @@ export default function SellerOrderPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="px-3 py-1.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] w-56" />
             </div>
+            <button onClick={downloadOrderCSV}
+              className="border border-[#E2E8F0] bg-white hover:bg-[#F8FAFC] px-4 py-1.5 rounded-[6px] text-sm font-medium transition-colors flex items-center gap-1.5 shrink-0" style={{ color: '#374151' }}>
+              ↓ 주문 내보내기
+            </button>
+            </div>
 
             {/* Table */}
             <div className="bg-white rounded-lg border border-[#E2E8F0] overflow-x-auto shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
@@ -158,7 +210,9 @@ export default function SellerOrderPage() {
                     <tr><td colSpan={7} className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>주문이 없습니다.</td></tr>
                   ) : (
                     orders.map((o) => (
-                      <tr key={o.id} className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors">
+                      <tr key={o.id}
+                        onClick={() => openOrderDetail(o)}
+                        className="border-b border-[#F1F5F9] hover:bg-[#F0F4FF] transition-colors cursor-pointer">
                         <td className="px-4 py-3 font-mono text-xs whitespace-nowrap" style={{ color: '#374151' }}>{o.order_number}</td>
                         <td className="px-4 py-3"><ChannelBadge channel={o.channel} /></td>
                         <td className="px-4 py-3 font-medium" style={{ color: '#0F172A' }}>{o.receiver_name}</td>
@@ -174,7 +228,7 @@ export default function SellerOrderPage() {
                 </tbody>
               </table>
             </div>
-            <p className="text-xs mt-2" style={{ color: '#94A3B8' }}>총 {total}건</p>
+            <p className="text-xs mt-2" style={{ color: '#94A3B8' }}>총 {total}건 · 행 클릭 시 상세 보기</p>
           </div>
 
           {/* Right panel */}
@@ -212,6 +266,165 @@ export default function SellerOrderPage() {
           </div>
         </div>
       </div>
+
+      {/* Order detail modal */}
+      {selectedOrder && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between shrink-0">
+              <div>
+                <h3 className="font-bold text-lg" style={{ color: '#0F172A' }}>주문 상세</h3>
+                <p className="text-xs mt-0.5 font-mono" style={{ color: '#64748B' }}>{selectedOrder.order_number}</p>
+              </div>
+              <button onClick={() => setSelectedOrder(null)}
+                className="text-[#94A3B8] hover:text-[#475569] text-2xl font-light leading-none">×</button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-[#E2E8F0] px-6 shrink-0">
+              {[['info', '주문 정보'], ['history', '처리 이력']].map(([key, label]) => (
+                <button key={key} onClick={() => setDetailTab(key)}
+                  className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                    detailTab === key ? 'border-[#2563EB] text-[#2563EB]' : 'border-transparent text-[#64748B] hover:text-[#374151]'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {detailLoading ? (
+                <div className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>로딩 중...</div>
+              ) : detailTab === 'info' ? (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                    <div>
+                      <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>채널</p>
+                      <ChannelBadge channel={selectedOrder.channel} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>주문번호</p>
+                      <p className="font-mono text-xs" style={{ color: '#374151' }}>{selectedOrder.order_number}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>주문일시</p>
+                      <p style={{ color: '#374151' }}>{new Date(selectedOrder.created_at).toLocaleString('ko-KR')}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>현재 상태</p>
+                      <StatusBadge status={selectedOrder.status} />
+                      <p className="text-xs mt-1" style={{ color: '#94A3B8' }}>
+                        {{
+                          RECEIVED:  '채널 주문이 수집되어 출고 대기 중입니다',
+                          PICKING:   '피킹/포장 작업이 진행 중입니다',
+                          PACKED:    '포장이 완료되어 출고 대기 중입니다',
+                          SHIPPED:   '택배사에 인계되었습니다',
+                          DELIVERED: '고객에게 배송 완료되었습니다',
+                          CANCELLED: '주문이 취소되었습니다',
+                        }[selectedOrder.status]}
+                      </p>
+                    </div>
+                    {selectedOrder.tracking_number && (
+                      <div>
+                        <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>송장번호</p>
+                        <p className="font-mono text-xs font-semibold" style={{ color: '#374151' }}>{selectedOrder.tracking_number}</p>
+                      </div>
+                    )}
+                    {selectedOrder.carrier && (
+                      <div>
+                        <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>택배사</p>
+                        <p style={{ color: '#374151' }}>{{ CJ: 'CJ대한통운', HANJIN: '한진택배', LOTTE: '롯데택배', ROSEN: '로젠택배', ETC: '기타' }[selectedOrder.carrier] || selectedOrder.carrier}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>수령인</p>
+                      <p className="font-medium" style={{ color: '#0F172A' }}>{selectedOrder.receiver_name}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>연락처</p>
+                      <p style={{ color: '#374151' }}>{selectedOrder.receiver_phone}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>주소</p>
+                      <p style={{ color: '#374151' }}>{selectedOrder.receiver_address}</p>
+                    </div>
+                    {selectedOrder.note && (
+                      <div className="col-span-2">
+                        <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>메모</p>
+                        <p style={{ color: '#374151' }}>{selectedOrder.note}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedOrder.items?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#64748B' }}>주문 상품</p>
+                      <div className="border border-[#E2E8F0] rounded-lg overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead className="bg-[#F8FAFC]">
+                            <tr>
+                              {['상품명', '수량', '단가', '소계'].map(h => (
+                                <th key={h} className="px-3 py-2 text-left text-xs font-medium" style={{ color: '#64748B' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedOrder.items.map(it => (
+                              <tr key={it.id} className="border-t border-[#F1F5F9]">
+                                <td className="px-3 py-2" style={{ color: '#0F172A' }}>{it.product_name}</td>
+                                <td className="px-3 py-2" style={{ color: '#374151' }}>{it.quantity}</td>
+                                <td className="px-3 py-2" style={{ color: '#374151' }}>₩{Number(it.unit_price).toLocaleString()}</td>
+                                <td className="px-3 py-2 font-medium" style={{ color: '#0F172A' }}>₩{(it.quantity * it.unit_price).toLocaleString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="flex justify-end mt-2">
+                        <span className="text-sm font-bold" style={{ color: '#0F172A' }}>
+                          합계: ₩{Number(selectedOrder.total_amount).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  {orderHistory.length === 0 ? (
+                    <p className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>처리 이력이 없습니다.</p>
+                  ) : (
+                    <div className="relative">
+                      <div className="absolute left-[5px] top-2 bottom-2 w-px bg-[#E2E8F0]" />
+                      <div className="space-y-4 pl-6">
+                        {orderHistory.map((h) => (
+                          <div key={h.id} className="relative">
+                            <div className="absolute -left-6 top-1 w-3 h-3 rounded-full bg-[#2563EB] border-2 border-white shadow-sm" />
+                            <div className="bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] px-4 py-3">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <span className="text-xs font-semibold" style={{ color: '#64748B' }}>
+                                  {h.created_at ? new Date(h.created_at).toLocaleString('ko-KR') : '—'}
+                                </span>
+                                <span className="text-xs font-medium" style={{ color: '#374151' }}>{h.changed_by_name}</span>
+                              </div>
+                              <p className="text-sm" style={{ color: '#0F172A' }}>
+                                <span className="font-medium">{h.field_changed}</span>{': '}
+                                <span style={{ color: '#64748B' }}>{h.old_value || '—'}</span>
+                                {' → '}
+                                <span className="font-semibold" style={{ color: '#2563EB' }}>{h.new_value}</span>
+                              </p>
+                              {h.note && <p className="text-xs mt-1" style={{ color: '#94A3B8' }}>{h.note}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </SidebarLayout>
   )
 }

@@ -58,12 +58,15 @@ class InventoryResponse(BaseModel):
     product_name: str
     sku: str
     storage_type: StorageType
+    warehouse_zone: Optional[str]
     lot_number: str
     expiry_date: date
     quantity: int
     location: Optional[str]
     inbound_date: Optional[date]
     days_until_expiry: int
+    allocated_stock: int = 0
+    pending_inbound: int = 0
 
     class Config:
         from_attributes = True

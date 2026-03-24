@@ -17,6 +17,22 @@ function DaysCell({ days }) {
 
 const STORAGE_LABEL = { ROOM_TEMP: '상온', COLD: '냉장' }
 
+const ABC_STYLE = {
+  A: 'bg-[#FEE2E2] text-[#991B1B]',
+  B: 'bg-[#FEF9C3] text-[#854D0E]',
+  C: 'bg-[#F1F5F9] text-[#475569]',
+  D: 'bg-[#ECFEFF] text-[#0E7490]',
+}
+
+function AbcBadge({ cls }) {
+  if (!cls) return null
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${ABC_STYLE[cls] || ABC_STYLE.C}`}>
+      {cls}
+    </span>
+  )
+}
+
 const INPUT_CLS = "w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB]"
 
 function LiveIndicator() {
@@ -65,6 +81,7 @@ export default function InventoryPage() {
   const [filterSeller, setFilterSeller] = useState('')
   const [sellers, setSellers] = useState([])
   const [alertCount, setAlertCount] = useState(0)
+  const [abcMap, setAbcMap] = useState({})
   const [showModal, setShowModal] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [tick, setTick] = useState(0)
@@ -95,6 +112,7 @@ export default function InventoryPage() {
     fetchInventory()
     fetchProducts()
     api.get('/sellers/').then(r => setSellers(r.data)).catch(() => {})
+    api.get('/slotting/abc-map').then(r => setAbcMap(r.data)).catch(() => {})
   }, [])
   useEffect(() => { fetchInventory() }, [filterSeller, tick])
 
@@ -103,16 +121,38 @@ export default function InventoryPage() {
     return () => clearInterval(id)
   }, [])
 
+  const counts = {
+    expiring:  inventory.filter((r) => r.days_until_expiry <= 30).length,
+    low_stock: inventory.filter((r) => r.quantity < 20).length,
+    cold:      inventory.filter((r) => r.storage_type === 'COLD' || r.warehouse_zone === 'D').length,
+  }
+
   const filtered = inventory.filter((row) => {
-    if (filter === 'expiring' && row.days_until_expiry > 30) return false
-    if (filter === 'cold' && row.storage_type !== 'COLD') return false
-    if (filter === 'low_stock' && row.quantity >= 50) return false
+    if (filter === 'expiring'  && row.days_until_expiry > 30) return false
+    if (filter === 'cold'      && row.storage_type !== 'COLD' && row.warehouse_zone !== 'D') return false
+    if (filter === 'low_stock' && row.quantity >= 20) return false
     if (search) {
       const q = search.toLowerCase()
       if (!row.product_name.toLowerCase().includes(q) && !row.sku.toLowerCase().includes(q)) return false
     }
     return true
   })
+
+  const downloadInventoryCSV = () => {
+    const esc = (v) => { const s = String(v ?? ''); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s }
+    const headers = ['상품명','SKU','LOT번호','유통기한','남은일수','수량','보관방식','ABC등급','상태']
+    const rows = filtered.map(r => [
+      r.product_name, r.sku, r.lot_number, r.expiry_date, r.days_until_expiry, r.quantity,
+      STORAGE_LABEL[r.storage_type] || r.storage_type,
+      abcMap[r.product_id] || '',
+      r.days_until_expiry <= 30 ? '만료임박' : r.days_until_expiry <= 60 ? '주의' : '정상',
+    ])
+    const csv = [headers, ...rows].map(row => row.map(esc).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `재고현황_${new Date().toISOString().slice(0,10)}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const handleFormChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
 
@@ -163,14 +203,26 @@ export default function InventoryPage() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2 flex-wrap">
-              {[{ key: 'all', label: '전체' }, { key: 'expiring', label: '만료임박' }, { key: 'low_stock', label: '재고부족' }, { key: 'cold', label: '냉장보관' }].map(({ key, label }) => (
+              {[
+                { key: 'all', label: '전체' },
+                { key: 'expiring', label: '만료임박' },
+                { key: 'low_stock', label: '재고부족' },
+                { key: 'cold', label: '냉장보관' },
+              ].map(({ key, label }) => (
                 <button key={key} onClick={() => setFilter(key)}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     filter === key
                       ? 'bg-[#2563EB] text-white'
                       : 'bg-white border border-[#E2E8F0] text-[#374151] hover:bg-[#F8FAFC]'
                   }`}>
                   {label}
+                  {counts[key] != null && counts[key] > 0 && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none ${
+                      filter === key ? 'bg-white/30 text-white' : 'bg-[#EF4444] text-white'
+                    }`}>
+                      {counts[key]}
+                    </span>
+                  )}
                 </button>
               ))}
               <select value={filterSeller} onChange={(e) => setFilterSeller(e.target.value)}
@@ -182,24 +234,30 @@ export default function InventoryPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="ml-2 px-3 py-1.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 w-52" />
             </div>
-            <button onClick={() => setShowModal(true)}
-              className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-2 rounded-[6px] text-sm font-semibold transition-colors">
-              + 입고 등록
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={downloadInventoryCSV}
+                className="border border-[#E2E8F0] bg-white hover:bg-[#F8FAFC] px-4 py-2 rounded-[6px] text-sm font-medium transition-colors flex items-center gap-1.5" style={{ color: '#374151' }}>
+                ↓ 재고 내보내기
+              </button>
+              <button onClick={() => setShowModal(true)}
+                className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-2 rounded-[6px] text-sm font-semibold transition-colors">
+                + 입고 등록
+              </button>
+            </div>
           </div>
 
           <div className="bg-white rounded-lg border border-[#E2E8F0] overflow-x-auto shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
             <table className="w-full text-sm">
               <thead className="bg-[#F8FAFC]">
                 <tr>
-                  {['상품명', 'SKU', 'LOT번호', '유통기한', '남은일수', '수량', '보관방식', '상태'].map((h) => (
+                  {['상품명', 'SKU', 'LOT번호', '유통기한', '남은일수', '수량', '보관방식', 'ABC', '상태'].map((h) => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide whitespace-nowrap border-b border-[#E2E8F0]" style={{ color: '#64748B' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>데이터가 없습니다.</td></tr>
+                  <tr><td colSpan={9} className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>데이터가 없습니다.</td></tr>
                 ) : (
                   filtered.map((row) => (
                     <tr key={row.id}
@@ -215,6 +273,7 @@ export default function InventoryPage() {
                           {STORAGE_LABEL[row.storage_type]}
                         </span>
                       </td>
+                      <td className="px-4 py-3"><AbcBadge cls={abcMap[String(row.product_id)]} /></td>
                       <td className="px-4 py-3"><ExpiryBadge days={row.days_until_expiry} /></td>
                     </tr>
                   ))

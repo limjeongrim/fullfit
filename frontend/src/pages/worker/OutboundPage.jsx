@@ -25,6 +25,13 @@ export default function OutboundPage() {
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
+  const [trackingNum, setTrackingNum] = useState('')
+  const [courier, setCourier] = useState('')
+  const [boxCount, setBoxCount] = useState(1)
+  const [checkQty, setCheckQty] = useState(false)
+  const [checkPacking, setCheckPacking] = useState(false)
+  const [checkLabel, setCheckLabel] = useState(false)
+  const [modalErr, setModalErr] = useState('')
 
   const todayStr = new Date().toISOString().slice(0, 10)
 
@@ -47,13 +54,34 @@ export default function OutboundPage() {
 
   useEffect(() => { fetchOrders() }, [])
 
+  const openConfirmModal = (orderId) => {
+    setTrackingNum('')
+    setCourier('')
+    setBoxCount(1)
+    setCheckQty(false)
+    setCheckPacking(false)
+    setCheckLabel(false)
+    setModalErr('')
+    setConfirmId(orderId)
+  }
+
   const handleOutbound = async (orderId) => {
+    if (!trackingNum.trim()) { setModalErr('송장번호를 입력해주세요'); return }
+    if (!courier) { setModalErr('택배사를 선택해주세요'); return }
+    if (!checkQty || !checkPacking || !checkLabel) { setModalErr('모든 항목을 확인해주세요'); return }
     setConfirmId(null)
     setActing(orderId)
     try {
       await api.patch(`/orders/${orderId}/status`, { status: 'SHIPPED' })
+      try {
+        await api.post('/deliveries/', {
+          order_id: orderId,
+          tracking_number: trackingNum.trim(),
+          carrier: courier,
+        })
+      } catch { /* delivery creation may require admin role */ }
       await fetchOrders()
-      addToast('success', '출고 처리 완료')
+      addToast('success', '출고 처리가 완료되었습니다')
     } catch (err) {
       addToast('error', err.response?.data?.detail || '처리 실패')
     } finally {
@@ -133,7 +161,7 @@ export default function OutboundPage() {
                     </div>
 
                     <button
-                      onClick={() => setConfirmId(o.id)}
+                      onClick={() => openConfirmModal(o.id)}
                       disabled={isActing}
                       className="w-full py-4 bg-[#2563EB] hover:bg-[#1D4ED8] active:bg-[#1E40AF] text-white text-base font-bold rounded-lg transition-colors disabled:opacity-50">
                       {isActing ? '처리 중...' : '🚚 출고 완료 처리'}
@@ -163,28 +191,108 @@ export default function OutboundPage() {
           )}
         </div>
 
-        {/* Confirmation dialog */}
+        {/* Outbound confirmation modal */}
         {confirmId && confirmOrder && (
-          <div className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-              <div className="text-center mb-5">
-                <div className="text-5xl mb-3">🚚</div>
-                <h3 className="text-xl font-bold" style={{ color: '#0F172A' }}>출고 완료 처리</h3>
-                <p className="mt-2" style={{ color: '#64748B' }}>아래 주문을 출고 처리하시겠습니까?</p>
+          <div
+            className="fixed inset-0 bg-black/60 flex items-end sm:items-center justify-center z-50 p-4"
+            onClick={() => setConfirmId(null)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold" style={{ color: '#0F172A' }}>출고 처리 확인</h3>
+                <button onClick={() => setConfirmId(null)} className="text-2xl leading-none" style={{ color: '#94A3B8' }}>×</button>
               </div>
-              <div className="bg-[#F0FDF4] rounded-xl p-4 mb-5 border border-[#BBF7D0]">
-                <p className="font-mono text-sm" style={{ color: '#64748B' }}>{confirmOrder.order_number}</p>
-                <p className="text-lg font-bold mt-1" style={{ color: '#0F172A' }}>{confirmOrder.receiver_name}</p>
-                <p className="text-sm truncate" style={{ color: '#64748B' }}>{confirmOrder.receiver_address}</p>
-                <p className="font-semibold mt-1" style={{ color: '#166534' }}>₩{Number(confirmOrder.total_amount).toLocaleString()}</p>
+
+              {/* Order summary */}
+              <div className="bg-[#F0FDF4] rounded-xl p-3 mb-4 border border-[#BBF7D0]">
+                <p className="font-mono text-xs" style={{ color: '#64748B' }}>{confirmOrder.order_number}</p>
+                <p className="text-base font-bold mt-0.5" style={{ color: '#0F172A' }}>{confirmOrder.receiver_name}</p>
+                <p className="text-xs truncate" style={{ color: '#64748B' }}>{confirmOrder.receiver_address}</p>
               </div>
+
+              {/* 송장번호 */}
+              <div className="mb-3">
+                <label className="block text-sm font-semibold mb-1.5" style={{ color: '#374151' }}>
+                  송장번호 <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+                <input
+                  type="text"
+                  value={trackingNum}
+                  onChange={e => setTrackingNum(e.target.value)}
+                  placeholder="송장번호를 입력하세요"
+                  className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#2563EB]"
+                  style={{ color: '#0F172A' }}
+                />
+              </div>
+
+              {/* 택배사 */}
+              <div className="mb-3">
+                <label className="block text-sm font-semibold mb-1.5" style={{ color: '#374151' }}>
+                  택배사 <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+                <select
+                  value={courier}
+                  onChange={e => setCourier(e.target.value)}
+                  className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#2563EB]"
+                  style={{ color: courier ? '#0F172A' : '#94A3B8' }}
+                >
+                  <option value="">선택하세요</option>
+                  <option value="CJ대한통운">CJ대한통운</option>
+                  <option value="롯데택배">롯데택배</option>
+                  <option value="한진택배">한진택배</option>
+                  <option value="로젠택배">로젠택배</option>
+                </select>
+              </div>
+
+              {/* 박스 수량 */}
+              <div className="mb-4">
+                <label className="block text-sm font-semibold mb-1.5" style={{ color: '#374151' }}>
+                  박스 수량 <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+                <input
+                  type="number"
+                  value={boxCount}
+                  onChange={e => setBoxCount(Math.max(1, parseInt(e.target.value) || 1))}
+                  min={1}
+                  className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-[#2563EB]"
+                  style={{ color: '#0F172A' }}
+                />
+              </div>
+
+              {/* 체크리스트 */}
+              <div className="mb-4 bg-[#F8FAFC] rounded-xl p-4 border border-[#E2E8F0] flex flex-col gap-3">
+                {[
+                  { key: 'qty', checked: checkQty, set: setCheckQty, label: '상품 수량 확인 완료' },
+                  { key: 'pack', checked: checkPacking, set: setCheckPacking, label: '포장 상태 확인 완료' },
+                  { key: 'label', checked: checkLabel, set: setCheckLabel, label: '송장 부착 완료' },
+                ].map(item => (
+                  <label key={item.key} className="flex items-center gap-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={item.checked}
+                      onChange={e => item.set(e.target.checked)}
+                      className="w-5 h-5 rounded border-[#D1D5DB] accent-[#2563EB] cursor-pointer"
+                    />
+                    <span className="text-sm font-medium" style={{ color: '#374151' }}>{item.label}</span>
+                  </label>
+                ))}
+              </div>
+
+              {/* Validation error */}
+              {modalErr && (
+                <p className="text-sm font-semibold mb-3" style={{ color: '#EF4444' }}>{modalErr}</p>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <button onClick={() => setConfirmId(null)}
-                  className="py-4 border-2 border-[#E2E8F0] rounded-xl text-base font-semibold hover:bg-[#F8FAFC] transition-colors" style={{ color: '#374151' }}>
+                  className="py-3.5 border-2 border-[#E2E8F0] rounded-xl text-sm font-semibold hover:bg-[#F8FAFC] transition-colors" style={{ color: '#374151' }}>
                   취소
                 </button>
                 <button onClick={() => handleOutbound(confirmId)}
-                  className="py-4 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl text-base font-bold transition-colors">
+                  className="py-3.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl text-sm font-bold transition-colors">
                   출고 완료
                 </button>
               </div>

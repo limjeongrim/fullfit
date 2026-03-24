@@ -21,6 +21,7 @@ class UserResponse(BaseModel):
     email: str
     role: UserRole
     full_name: str
+    company_name: Optional[str] = None
 
     class Config:
         from_attributes = True

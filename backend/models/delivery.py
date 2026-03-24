@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Date, Enum, ForeignKey, Text, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, Integer, String, DateTime, Date, Enum, ForeignKey, Text, Float, UniqueConstraint
+from sqlalchemy.orm import relationship, backref
 from backend.database import Base
 
 
@@ -9,6 +9,7 @@ class Carrier(str, enum.Enum):
     CJ = "CJ"
     HANJIN = "HANJIN"
     LOTTE = "LOTTE"
+    ROSEN = "ROSEN"
     ETC = "ETC"
 
 
@@ -31,7 +32,9 @@ class Delivery(Base):
     estimated_delivery = Column(Date, nullable=True)
     actual_delivery = Column(Date, nullable=True)
     note = Column(Text, nullable=True)
+    delivery_lat = Column(Float, nullable=True)
+    delivery_lng = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    order = relationship("Order", foreign_keys=[order_id])
+    order = relationship("Order", foreign_keys=[order_id], backref=backref("delivery", uselist=False))

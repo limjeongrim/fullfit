@@ -8,6 +8,9 @@ from backend.models.user import User, UserRole
 from backend.models.product import Product
 from backend.models.inventory import Inventory
 from backend.models.inbound import Inbound
+from backend.models.inbound_schedule import InboundSchedule
+from backend.models.order import Order, OrderStatus
+from backend.models.order_item import OrderItem
 from backend.schemas.inventory import (
     ProductCreate, ProductResponse,
     InboundCreate, InboundResponse,
@@ -28,6 +31,7 @@ def _to_inv_response(inv: Inventory) -> InventoryResponse:
         product_name=inv.product.name,
         sku=inv.product.sku,
         storage_type=inv.product.storage_type,
+        warehouse_zone=inv.product.warehouse_zone,
         lot_number=inv.lot_number,
         expiry_date=inv.expiry_date,
         quantity=inv.quantity,
@@ -64,7 +68,40 @@ def list_inventory_seller(
         .order_by(Inventory.expiry_date.asc())
         .all()
     )
-    return [_to_inv_response(inv) for inv in rows]
+
+    # Allocated stock: items in active orders (RECEIVED/PICKING/PACKED)
+    allocated_rows = (
+        db.query(OrderItem.product_id, func.sum(OrderItem.quantity))
+        .join(Order)
+        .filter(
+            Order.seller_id == current_user.id,
+            Order.status.in_([OrderStatus.RECEIVED, OrderStatus.PICKING, OrderStatus.PACKED]),
+        )
+        .group_by(OrderItem.product_id)
+        .all()
+    )
+    allocated_map = {pid: (qty or 0) for pid, qty in allocated_rows}
+
+    # Pending inbound: scheduled/confirmed inbound schedules
+    pending_rows = (
+        db.query(Inbound.product_id, func.sum(Inbound.quantity))
+        .join(InboundSchedule, InboundSchedule.inbound_id == Inbound.id)
+        .filter(
+            InboundSchedule.seller_id == current_user.id,
+            InboundSchedule.status.in_(["SCHEDULED", "CONFIRMED"]),
+        )
+        .group_by(Inbound.product_id)
+        .all()
+    )
+    pending_map = {pid: (qty or 0) for pid, qty in pending_rows}
+
+    result = []
+    for inv in rows:
+        r = _to_inv_response(inv)
+        r.allocated_stock = allocated_map.get(inv.product_id, 0)
+        r.pending_inbound = pending_map.get(inv.product_id, 0)
+        result.append(r)
+    return result
 
 
 @router.get("/inventory/alerts", response_model=List[InventoryResponse])

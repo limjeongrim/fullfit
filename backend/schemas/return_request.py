@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 from backend.models.return_request import ReturnReason, ReturnStatus
 
@@ -15,6 +15,12 @@ class ReturnStatusUpdate(BaseModel):
     inspection_note: Optional[str] = None
 
 
+class ReturnItemInfo(BaseModel):
+    product_name: str
+    sku: str
+    quantity: int
+
+
 class ReturnResponse(BaseModel):
     id: int
     order_id: int
@@ -28,6 +34,7 @@ class ReturnResponse(BaseModel):
     resolved_at: Optional[datetime]
     order_number: str
     seller_name: str
+    items: List[ReturnItemInfo] = []
 
     class Config:
         from_attributes = True

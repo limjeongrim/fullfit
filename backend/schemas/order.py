@@ -18,6 +18,7 @@ class OrderItemResponse(BaseModel):
     storage_type: str
     quantity: int
     unit_price: Decimal
+    location_code: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -52,6 +53,8 @@ class OrderResponse(BaseModel):
     items: List[OrderItemResponse]
     created_at: datetime
     updated_at: datetime
+    tracking_number: Optional[str] = None
+    carrier: Optional[str] = None
 
     class Config:
         from_attributes = True

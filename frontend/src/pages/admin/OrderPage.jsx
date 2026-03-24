@@ -105,6 +105,11 @@ export default function AdminOrderPage() {
   const [notifs, setNotifs] = useState([])
   const [adminStats, setAdminStats] = useState(null)
 
+  const [selectedOrder, setSelectedOrder] = useState(null)
+  const [orderHistory, setOrderHistory] = useState([])
+  const [detailTab, setDetailTab] = useState('info')
+  const [detailLoading, setDetailLoading] = useState(false)
+
   const [form, setForm] = useState({
     channel: 'SMARTSTORE', receiver_name: '', receiver_phone: '',
     receiver_address: '', total_amount: '', note: '',
@@ -125,6 +130,25 @@ export default function AdminOrderPage() {
     setOrders(res.data.items)
     setTotal(res.data.total)
     setLastUpdated(Date.now())
+  }
+
+  const openOrderDetail = async (order) => {
+    setSelectedOrder(order)
+    setDetailTab('info')
+    setOrderHistory([])
+    setDetailLoading(true)
+    try {
+      const [detRes, histRes] = await Promise.all([
+        api.get(`/orders/${order.id}`),
+        api.get(`/orders/${order.id}/history`),
+      ])
+      setSelectedOrder(detRes.data)
+      setOrderHistory(histRes.data)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setDetailLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -197,6 +221,29 @@ export default function AdminOrderPage() {
   const packedCount = count('PACKED')
   const INPUT_CLS = "w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB]"
 
+  const downloadOrderCSV = () => {
+    const esc = (v) => { const s = String(v ?? ''); return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s }
+    const headers = ['주문번호','채널','브랜드','수령인','주소','상품명','수량','금액','상태','주문일시','송장번호']
+    const rows = displayedOrders.map(o => [
+      o.order_number,
+      CHANNEL_META[o.channel]?.label || o.channel,
+      o.seller_name || '',
+      o.receiver_name,
+      o.receiver_address,
+      o.items?.map(it => it.product_name).join(' / ') || '',
+      o.items?.map(it => it.quantity).join(' / ') || '',
+      o.total_amount,
+      STATUS_META[o.status]?.label || o.status,
+      new Date(o.created_at).toLocaleString('ko-KR'),
+      o.tracking_number || '',
+    ])
+    const csv = [headers, ...rows].map(r => r.map(esc).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `주문내역_${new Date().toISOString().slice(0,10)}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <SidebarLayout>
       <div className="min-h-screen bg-[#F8FAFC]">
@@ -243,10 +290,16 @@ export default function AdminOrderPage() {
                     onChange={(e) => setSearch(e.target.value)}
                     className="px-3 py-1.5 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 w-56 bg-white" />
                 </div>
-                <button onClick={() => setShowModal(true)}
-                  className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-2 rounded-[6px] text-sm font-semibold transition-colors">
-                  + 수동 주문 등록
-                </button>
+                <div className="flex items-center gap-2">
+                  <button onClick={downloadOrderCSV}
+                    className="border border-[#E2E8F0] bg-white hover:bg-[#F8FAFC] px-4 py-2 rounded-[6px] text-sm font-medium transition-colors flex items-center gap-1.5" style={{ color: '#374151' }}>
+                    ↓ 주문 내보내기
+                  </button>
+                  <button onClick={() => setShowModal(true)}
+                    className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-2 rounded-[6px] text-sm font-semibold transition-colors">
+                    + 수동 주문 등록
+                  </button>
+                </div>
               </div>
 
               {/* Table */}
@@ -264,7 +317,9 @@ export default function AdminOrderPage() {
                       <tr><td colSpan={8} className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>주문이 없습니다.</td></tr>
                     ) : (
                       displayedOrders.map((o) => (
-                        <tr key={o.id} className="border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors">
+                        <tr key={o.id}
+                          onClick={() => openOrderDetail(o)}
+                          className="border-b border-[#F1F5F9] hover:bg-[#F0F4FF] transition-colors cursor-pointer">
                           <td className="px-4 py-3 font-mono text-xs whitespace-nowrap" style={{ color: '#64748B' }}>{o.order_number}</td>
                           <td className="px-4 py-3"><ChannelBadge channel={o.channel} /></td>
                           <td className="px-4 py-3 font-medium" style={{ color: '#0F172A' }}>{o.receiver_name}</td>
@@ -274,7 +329,7 @@ export default function AdminOrderPage() {
                           <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#64748B' }}>
                             {new Date(o.created_at).toLocaleString('ko-KR')}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                             {NEXT_STATUSES[o.status]?.length > 0 ? (
                               <select defaultValue=""
                                 onChange={(e) => { if (e.target.value) handleStatusChange(o.id, e.target.value); e.target.value = '' }}
@@ -294,7 +349,7 @@ export default function AdminOrderPage() {
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs mt-2" style={{ color: '#94A3B8' }}>총 {filterToday ? displayedOrders.length : total}건{filterToday ? ' (오늘)' : ''}</p>
+              <p className="text-xs mt-2" style={{ color: '#94A3B8' }}>총 {filterToday ? displayedOrders.length : total}건{filterToday ? ' (오늘)' : ''} · 행 클릭 시 상세 보기</p>
             </div>
 
             {/* Right panel */}
@@ -395,6 +450,137 @@ export default function AdminOrderPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Order detail modal */}
+        {selectedOrder && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+              <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between shrink-0">
+                <div>
+                  <h3 className="font-bold text-lg" style={{ color: '#0F172A' }}>주문 상세</h3>
+                  <p className="text-xs mt-0.5 font-mono" style={{ color: '#64748B' }}>{selectedOrder.order_number}</p>
+                </div>
+                <button onClick={() => setSelectedOrder(null)}
+                  className="text-[#94A3B8] hover:text-[#475569] text-2xl font-light leading-none">×</button>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex border-b border-[#E2E8F0] px-6 shrink-0">
+                {[['info', '주문 정보'], ['history', '변경 이력']].map(([key, label]) => (
+                  <button key={key} onClick={() => setDetailTab(key)}
+                    className={`py-3 px-4 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                      detailTab === key ? 'border-[#2563EB] text-[#2563EB]' : 'border-transparent text-[#64748B] hover:text-[#374151]'
+                    }`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6">
+                {detailLoading ? (
+                  <div className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>로딩 중...</div>
+                ) : detailTab === 'info' ? (
+                  <div className="space-y-5">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                      <div>
+                        <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>채널</p>
+                        <ChannelBadge channel={selectedOrder.channel} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>상태</p>
+                        <StatusBadge status={selectedOrder.status} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>셀러</p>
+                        <p className="font-medium" style={{ color: '#0F172A' }}>{selectedOrder.seller_name}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>주문일시</p>
+                        <p style={{ color: '#374151' }}>{new Date(selectedOrder.created_at).toLocaleString('ko-KR')}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>수신자</p>
+                        <p className="font-medium" style={{ color: '#0F172A' }}>{selectedOrder.receiver_name}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>연락처</p>
+                        <p style={{ color: '#374151' }}>{selectedOrder.receiver_phone}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>주소</p>
+                        <p style={{ color: '#374151' }}>{selectedOrder.receiver_address}</p>
+                      </div>
+                      {selectedOrder.note && (
+                        <div className="col-span-2">
+                          <p className="text-xs font-medium mb-1" style={{ color: '#64748B' }}>메모</p>
+                          <p style={{ color: '#374151' }}>{selectedOrder.note}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {selectedOrder.items?.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: '#64748B' }}>주문 상품</p>
+                        <div className="border border-[#E2E8F0] rounded-lg overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead className="bg-[#F8FAFC]">
+                              <tr>
+                                {['상품명', '수량', '단가', '소계'].map(h => (
+                                  <th key={h} className="px-3 py-2 text-left text-xs font-medium" style={{ color: '#64748B' }}>{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedOrder.items.map(it => (
+                                <tr key={it.id} className="border-t border-[#F1F5F9]">
+                                  <td className="px-3 py-2" style={{ color: '#0F172A' }}>{it.product_name}</td>
+                                  <td className="px-3 py-2" style={{ color: '#374151' }}>{it.quantity}</td>
+                                  <td className="px-3 py-2" style={{ color: '#374151' }}>₩{Number(it.unit_price).toLocaleString()}</td>
+                                  <td className="px-3 py-2 font-medium" style={{ color: '#0F172A' }}>₩{(it.quantity * it.unit_price).toLocaleString()}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="flex justify-end mt-2">
+                          <span className="text-sm font-bold" style={{ color: '#0F172A' }}>
+                            합계: ₩{Number(selectedOrder.total_amount).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    {orderHistory.length === 0 ? (
+                      <p className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>변경 이력이 없습니다.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {orderHistory.map((h) => (
+                          <div key={h.id} className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0]">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <span className="text-sm font-medium" style={{ color: '#0F172A' }}>{h.changed_by_name}</span>
+                              <span className="text-xs whitespace-nowrap" style={{ color: '#94A3B8' }}>
+                                {h.created_at ? new Date(h.created_at).toLocaleString('ko-KR') : '—'}
+                              </span>
+                            </div>
+                            <div className="text-xs" style={{ color: '#64748B' }}>
+                              <span className="font-medium">{h.field_changed}</span>:{' '}
+                              <span>{h.old_value || '—'}</span>
+                              {' → '}
+                              <span className="font-semibold" style={{ color: '#2563EB' }}>{h.new_value}</span>
+                            </div>
+                            {h.note && <p className="text-xs mt-1" style={{ color: '#94A3B8' }}>{h.note}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

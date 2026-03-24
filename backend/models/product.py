@@ -19,7 +19,11 @@ class Product(Base):
     sku = Column(String, unique=True, index=True, nullable=False)
     barcode = Column(String, nullable=True)
     category = Column(String, nullable=True)
-    storage_type = Column(Enum(StorageType), default=StorageType.ROOM_TEMP, nullable=False)
+    storage_type    = Column(Enum(StorageType), default=StorageType.ROOM_TEMP, nullable=False)
+    warehouse_zone  = Column(String, default="B")   # A, B, C, D
+    warehouse_row   = Column(Integer, default=1)     # 1-10
+    warehouse_col   = Column(Integer, default=1)     # 1-5
+    location_code   = Column(String, nullable=True)  # e.g. "A-03-02"
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

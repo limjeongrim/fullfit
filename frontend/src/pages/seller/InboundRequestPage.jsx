@@ -1,17 +1,58 @@
 import { useEffect, useState } from 'react'
 import useToastStore from '../../store/toastStore'
+import useAuthStore from '../../store/authStore'
 import api from '../../api/axiosInstance'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
 
 const INPUT_CLS = "w-full px-3 py-2 border border-[#E2E8F0] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB]"
 
+function ScheduleBadge({ schedule, onConfirm }) {
+  if (!schedule) {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#F1F5F9] text-[#64748B]">
+        스케줄 배정 대기중
+      </span>
+    )
+  }
+
+  const statusMap = {
+    SCHEDULED: { cls: 'bg-[#EFF6FF] text-[#1D4ED8]', label: '배정됨' },
+    CONFIRMED: { cls: 'bg-[#F0FDF4] text-[#15803D]', label: '확정' },
+    COMPLETED: { cls: 'bg-[#F8FAFC] text-[#475569]', label: '완료' },
+    CANCELLED: { cls: 'bg-[#FEF2F2] text-[#DC2626]', label: '취소' },
+  }
+  const { cls, label } = statusMap[schedule.status] || statusMap.SCHEDULED
+
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-semibold text-[#0F172A]">
+        {schedule.scheduled_date} {schedule.time_slot}
+      </span>
+      <span className="text-xs text-[#64748B]">도크 {schedule.dock_number}번</span>
+      <div className="flex items-center gap-1.5">
+        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{label}</span>
+        {schedule.status === 'SCHEDULED' && (
+          <button
+            onClick={() => onConfirm(schedule.id)}
+            className="text-xs text-[#2563EB] hover:underline font-medium"
+          >
+            확정
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function SellerInboundRequestPage() {
-  const addToast = useToastStore((s) => s.addToast)
-  const [products, setProducts] = useState([])
-  const [history, setHistory] = useState([])
+  const addToast  = useToastStore((s) => s.addToast)
+  const user      = useAuthStore((s) => s.user)
+  const [products, setProducts]   = useState([])
+  const [history, setHistory]     = useState([])
+  const [schedules, setSchedules] = useState([])   // seller's upcoming schedules
   const [submitting, setSubmitting] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
-  const [formError, setFormError] = useState('')
+  const [formError, setFormError]   = useState('')
   const [form, setForm] = useState({
     product_id: '',
     quantity: '',
@@ -21,13 +62,27 @@ export default function SellerInboundRequestPage() {
     note: '',
   })
 
-  const fetchProducts = () => api.get('/products/seller').then(r => setProducts(r.data)).catch(() => {})
-  const fetchHistory = () => api.get('/inventory/inbound/seller').then(r => setHistory(r.data)).catch(() => {})
+  const fetchProducts  = () => api.get('/products/seller').then(r => setProducts(r.data)).catch(() => {})
+  const fetchHistory   = () => api.get('/inventory/inbound/seller').then(r => setHistory(r.data)).catch(() => {})
+  const fetchSchedules = () => {
+    if (!user?.id) return
+    api.get(`/inbound-schedule/seller/${user.id}`).then(r => setSchedules(r.data)).catch(() => {})
+  }
 
   useEffect(() => {
     fetchProducts()
     fetchHistory()
   }, [])
+
+  useEffect(() => {
+    if (user?.id) fetchSchedules()
+  }, [user?.id])
+
+  // Build map: inbound_id → schedule
+  const scheduleByInbound = {}
+  for (const s of schedules) {
+    scheduleByInbound[s.inbound_id] = s
+  }
 
   const handleChange = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
@@ -51,13 +106,24 @@ export default function SellerInboundRequestPage() {
         quantity: parseInt(form.quantity),
         note: noteLines.length > 0 ? noteLines.join('\n') : null,
       })
-      setSuccessMsg('입고 요청이 접수되었습니다. 상품 도착 후 창고에서 검수 후 재고에 반영됩니다.')
+      setSuccessMsg('입고 요청이 접수되었습니다. 관리자가 입고 시간대를 배정하면 알림을 드립니다.')
       setForm({ product_id: '', quantity: '', expected_arrival: '', lot_number: '', expiry_date: '', note: '' })
       fetchHistory()
+      fetchSchedules()
     } catch (err) {
       setFormError(err.response?.data?.detail || '입고 요청 실패')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleConfirm = async (scheduleId) => {
+    try {
+      await api.post(`/inbound-schedule/${scheduleId}/confirm`)
+      addToast('success', '입고 시간대를 확정했습니다.')
+      fetchSchedules()
+    } catch (e) {
+      addToast('error', '확정에 실패했습니다.')
     }
   }
 
@@ -69,6 +135,35 @@ export default function SellerInboundRequestPage() {
             <h2 className="text-2xl font-bold" style={{ color: '#0F172A' }}>입고 요청</h2>
             <p className="mt-1 text-sm" style={{ color: '#64748B' }}>풀핏 창고로 상품을 보내기 전에 입고 요청을 등록하세요.</p>
           </div>
+
+          {/* Upcoming schedule banner */}
+          {schedules.length > 0 && (
+            <div className="mb-6 bg-[#EFF6FF] border border-[#BFDBFE] rounded-xl px-5 py-4">
+              <p className="text-sm font-semibold text-[#1D4ED8] mb-2">📅 배정된 입고 시간대</p>
+              <div className="space-y-1">
+                {schedules.slice(0, 3).map((s) => (
+                  <div key={s.id} className="flex items-center justify-between text-sm">
+                    <span className="text-[#374151]">
+                      {s.scheduled_date} {s.time_slot} — 도크 {s.dock_number}번 ({s.product_name})
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        s.status === 'CONFIRMED' ? 'bg-[#F0FDF4] text-[#15803D]' : 'bg-[#EFF6FF] text-[#1D4ED8]'
+                      }`}>
+                        {s.status === 'CONFIRMED' ? '확정' : '배정됨'}
+                      </span>
+                      {s.status === 'SCHEDULED' && (
+                        <button onClick={() => handleConfirm(s.id)}
+                          className="text-xs text-[#2563EB] hover:underline font-medium">
+                          확정하기
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Form */}
           <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-6 mb-6">
@@ -136,7 +231,7 @@ export default function SellerInboundRequestPage() {
               <table className="w-full text-sm">
                 <thead className="bg-[#F8FAFC]">
                   <tr>
-                    {['상품명', 'LOT번호', '수량', '유통기한', '메모', '요청일'].map(h => (
+                    {['상품명', 'LOT번호', '수량', '유통기한', '배정된 입고 시간', '요청일'].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide whitespace-nowrap border-b border-[#E2E8F0]" style={{ color: '#64748B' }}>{h}</th>
                     ))}
                   </tr>
@@ -151,7 +246,12 @@ export default function SellerInboundRequestPage() {
                         <td className="px-4 py-3 font-mono text-xs" style={{ color: '#374151' }}>{r.lot_number}</td>
                         <td className="px-4 py-3" style={{ color: '#374151' }}>{r.quantity.toLocaleString()}개</td>
                         <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#64748B' }}>{r.expiry_date}</td>
-                        <td className="px-4 py-3 text-xs max-w-[160px] truncate" style={{ color: '#64748B' }}>{r.note || '—'}</td>
+                        <td className="px-4 py-3">
+                          <ScheduleBadge
+                            schedule={scheduleByInbound[r.id] || null}
+                            onConfirm={handleConfirm}
+                          />
+                        </td>
                         <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#64748B' }}>
                           {new Date(r.created_at).toLocaleDateString('ko-KR')}
                         </td>

@@ -9,6 +9,7 @@ from backend.database import get_db
 from backend.models.user import User, UserRole
 from backend.models.order import Order, OrderChannel, OrderStatus, STATUS_TRANSITIONS
 from backend.models.order_item import OrderItem
+from backend.models.order_history import OrderHistory
 from backend.models.product import Product
 from backend.schemas.order import (
     OrderCreate, OrderResponse, OrderListResponse, OrderListItem,
@@ -19,6 +20,20 @@ from backend.core.notify import create_notification
 from backend.models.notification import NotificationType
 
 router = APIRouter()
+
+STATUS_LABELS_KR = {
+    "RECEIVED":  "주문 접수",
+    "PICKING":   "출고 준비중",
+    "PACKED":    "패킹 완료",
+    "SHIPPED":   "출고 완료",
+    "DELIVERED": "배송 완료",
+    "CANCELLED": "취소",
+}
+ROLE_LABELS_KR = {
+    "ADMIN":  "관리자",
+    "WORKER": "작업자",
+    "SELLER": "셀러",
+}
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -57,11 +72,14 @@ def _order_to_response(order: Order) -> OrderResponse:
                 storage_type=it.product.storage_type,
                 quantity=it.quantity,
                 unit_price=it.unit_price,
+                location_code=it.product.location_code,
             )
             for it in order.items
         ],
         created_at=order.created_at,
         updated_at=order.updated_at,
+        tracking_number=order.delivery.tracking_number if order.delivery else None,
+        carrier=order.delivery.carrier.value if order.delivery else None,
     )
 
 
@@ -84,6 +102,7 @@ def _order_to_list_item(order: Order) -> OrderListItem:
                 storage_type=it.product.storage_type,
                 quantity=it.quantity,
                 unit_price=it.unit_price,
+                location_code=it.product.location_code,
             )
             for it in order.items
         ],
@@ -181,7 +200,7 @@ async def upload_orders_csv(
     current_user: User = Depends(require_role([UserRole.ADMIN])),
 ):
     content = await file.read()
-    text = content.decode("utf-8-sig")  # handle BOM
+    text = content.decode("utf-8-sig")
     reader = csv.DictReader(io.StringIO(text))
     required_cols = {"channel", "receiver_name", "receiver_phone", "receiver_address", "total_amount", "seller_id"}
     created = 0
@@ -219,6 +238,38 @@ async def upload_orders_csv(
     return {"created": created, "errors": errors}
 
 
+@router.get("/orders/{order_id}/history")
+def get_order_history(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    order = db.query(Order).filter(Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="주문을 찾을 수 없습니다.")
+    if current_user.role == UserRole.SELLER and order.seller_id != current_user.id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
+    histories = (
+        db.query(OrderHistory)
+        .filter(OrderHistory.order_id == order_id)
+        .order_by(OrderHistory.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": h.id,
+            "changed_by_name": h.changed_by_name,
+            "field_changed": h.field_changed,
+            "old_value": h.old_value,
+            "new_value": h.new_value,
+            "note": h.note,
+            "created_at": h.created_at.isoformat() if h.created_at else None,
+        }
+        for h in histories
+    ]
+
+
 @router.get("/orders/{order_id}", response_model=OrderResponse)
 def get_order(
     order_id: int,
@@ -246,16 +297,13 @@ def create_order(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role([UserRole.ADMIN, UserRole.SELLER])),
 ):
-    seller_id = current_user.id if current_user.role == UserRole.SELLER else data.items[0].product_id if False else current_user.id
-    # Sellers always own their own orders; admins create on their own account (or extend later)
     if current_user.role == UserRole.SELLER:
         seller_id = current_user.id
     else:
-        seller_id = current_user.id  # Admin creates under their own account for now
+        seller_id = current_user.id
 
     order = _build_order(db, data, seller_id)
     db.flush()
-    # Notify admins about new order
     admins = db.query(User).filter(User.role == UserRole.ADMIN).all()
     for admin in admins:
         create_notification(
@@ -265,7 +313,6 @@ def create_order(
         )
     db.commit()
     db.refresh(order)
-    # reload with relationships
     order = (
         db.query(Order)
         .options(joinedload(Order.seller), joinedload(Order.items).joinedload(OrderItem.product))
@@ -298,8 +345,21 @@ def update_order_status(
             detail=f"'{order.status}' 상태에서 '{data.status}'(으)로 변경할 수 없습니다."
         )
 
+    old_status = order.status
     order.status = data.status
     order.updated_at = datetime.utcnow()
+
+    role_label = ROLE_LABELS_KR.get(current_user.role.value, "")
+    changed_by_name = f"{current_user.full_name} ({role_label})"
+    db.add(OrderHistory(
+        order_id=order.id,
+        changed_by_id=current_user.id,
+        changed_by_name=changed_by_name,
+        field_changed="status",
+        old_value=STATUS_LABELS_KR.get(old_status.value, old_status.value),
+        new_value=STATUS_LABELS_KR.get(data.status.value, data.status.value),
+    ))
+
     db.commit()
     db.refresh(order)
     return _order_to_response(order)

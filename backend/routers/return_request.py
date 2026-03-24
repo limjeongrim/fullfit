@@ -7,13 +7,23 @@ from backend.models.return_request import ReturnRequest, ReturnStatus
 from backend.models.order import Order, OrderStatus
 from backend.models.inventory import Inventory
 from backend.models.user import UserRole
-from backend.schemas.return_request import ReturnCreate, ReturnResponse, ReturnStatusUpdate
+from backend.schemas.return_request import ReturnCreate, ReturnResponse, ReturnStatusUpdate, ReturnItemInfo
 from backend.core.dependencies import get_current_user, require_role
+from backend.core.notify import create_notification
+from backend.models.notification import NotificationType
 
 router = APIRouter(prefix="/returns", tags=["Returns"])
 
 
 def _to_response(r: ReturnRequest) -> ReturnResponse:
+    items = [
+        ReturnItemInfo(
+            product_name=it.product.name,
+            sku=it.product.sku,
+            quantity=it.quantity,
+        )
+        for it in r.order.items
+    ]
     return ReturnResponse(
         id=r.id,
         order_id=r.order_id,
@@ -27,6 +37,7 @@ def _to_response(r: ReturnRequest) -> ReturnResponse:
         resolved_at=r.resolved_at,
         order_number=r.order.order_number,
         seller_name=r.seller.full_name,
+        items=items,
     )
 
 
@@ -101,6 +112,12 @@ def update_return_status(
 
     if body.status in (ReturnStatus.RESTOCKED, ReturnStatus.DISPOSED):
         rr.resolved_at = datetime.utcnow()
+        result_label = "재입고 완료" if body.status == ReturnStatus.RESTOCKED else "폐기 처리 완료"
+        create_notification(
+            db, rr.seller_id, NotificationType.RETURN_PROCESSED,
+            f"반품 처리 완료 - {result_label}",
+            f"주문 {rr.order.order_number}의 반품이 {result_label}되었습니다.",
+        )
 
     if body.status == ReturnStatus.RESTOCKED:
         # Find the latest inventory LOT for the first order item's product

@@ -29,6 +29,8 @@ class DeliveryResponse(BaseModel):
     estimated_delivery: Optional[date]
     actual_delivery: Optional[date]
     note: Optional[str]
+    delivery_lat: Optional[float] = None
+    delivery_lng: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 

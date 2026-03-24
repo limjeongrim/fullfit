@@ -9,6 +9,10 @@ from backend.models.order_item import OrderItem
 from backend.models.inventory import Inventory
 from backend.models.product import Product
 from backend.models.promotion import Promotion
+from backend.models.reorder import ReorderRecommendation
+from backend.models.batch_picking import BatchPicking
+from backend.models.return_request import ReturnRequest, ReturnStatus
+from backend.models.settlement import Settlement, SettlementStatus
 from backend.core.dependencies import require_role
 
 router = APIRouter()
@@ -155,12 +159,34 @@ def admin_stats(
     forecast = _demand_forecast(db)
     demand_alert_count = sum(1 for f in forecast if f["reorder_recommended"])
 
+    reorder_alert_count = (
+        db.query(func.count(ReorderRecommendation.id))
+        .filter(ReorderRecommendation.status == "PENDING")
+        .scalar() or 0
+    )
+
+    import json as _json
+    batch_today_count = (
+        db.query(func.count(BatchPicking.id))
+        .filter(func.date(BatchPicking.created_at) == today)
+        .scalar() or 0
+    )
+    today_batches = db.query(BatchPicking).filter(func.date(BatchPicking.created_at) == today).all()
+    batch_trips_saved = sum(
+        max(len(_json.loads(b.order_ids)) - 1, 0)
+        for b in today_batches
+        if b.order_ids
+    )
+
     return {
         "today_orders": today_orders,
         "pending_orders": pending_orders,
         "low_stock_count": low_stock_count,
         "expiry_alert_count": expiry_alert_count,
         "demand_alert_count": demand_alert_count,
+        "reorder_alert_count": reorder_alert_count,
+        "batch_today_count":   batch_today_count,
+        "batch_trips_saved":   batch_trips_saved,
         "weekly_orders": _weekly_orders(db),
         "channel_breakdown": _channel_breakdown(db),
         "status_breakdown": _status_breakdown(db),
@@ -199,11 +225,30 @@ def seller_stats(
         .scalar() or 0
     )
 
+    pending_return_count = (
+        db.query(func.count(ReturnRequest.id))
+        .filter(
+            ReturnRequest.seller_id == sid,
+            ReturnRequest.status.in_([ReturnStatus.REQUESTED, ReturnStatus.IN_REVIEW]),
+        )
+        .scalar() or 0
+    )
+    unconfirmed_settlement_count = (
+        db.query(func.count(Settlement.id))
+        .filter(
+            Settlement.seller_id == sid,
+            Settlement.status == SettlementStatus.DRAFT,
+        )
+        .scalar() or 0
+    )
+
     return {
         "today_orders": today_orders,
         "total_orders": total_orders,
         "low_stock_count": low_stock_count,
         "expiry_alert_count": expiry_alert_count,
+        "pending_return_count": pending_return_count,
+        "unconfirmed_settlement_count": unconfirmed_settlement_count,
         "weekly_orders": _weekly_orders(db, seller_id=sid),
         "channel_breakdown": _channel_breakdown(db, seller_id=sid),
     }

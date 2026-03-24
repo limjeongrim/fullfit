@@ -82,6 +82,7 @@ export default function AdminDashboard() {
   const [sellerCount, setSellerCount] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [tick, setTick] = useState(0)
+  const [issueStats, setIssueStats] = useState(null)
 
   const fetchStats = () => {
     api.get('/stats/admin').then((r) => {
@@ -93,6 +94,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchStats()
     api.get('/sellers/').then((r) => setSellerCount(r.data.length)).catch(() => {})
+    api.get('/issues/stats').then((r) => setIssueStats(r.data)).catch(() => {})
   }, [tick])
 
   useEffect(() => {
@@ -127,13 +129,22 @@ export default function AdminDashboard() {
           </div>
 
           {/* Stats cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
             <StatCard label="오늘 주문"     value={stats?.today_orders}       color="blue"   icon="📋" onClick={() => navigate('/admin/orders?filter=today')} />
             <StatCard label="미처리 주문"   value={stats?.pending_orders}     color="yellow" icon="⏳" onClick={() => navigate('/admin/orders?filter=pending')} />
             <StatCard label="재고 부족"     value={stats?.low_stock_count}    color="red"    icon="⚠️" onClick={() => navigate('/admin/inventory?filter=low_stock')} />
             <StatCard label="유통기한 임박" value={stats?.expiry_alert_count} color="orange" icon="🕐" onClick={() => navigate('/admin/inventory?filter=expiry_alert')} />
             <StatCard label="수요 알림"     value={stats?.demand_alert_count} color="red"    icon="📈" />
+            <StatCard label="발주 필요"     value={stats?.reorder_alert_count} color="orange" icon="🛒" onClick={() => navigate('/admin/restock')} />
+            <StatCard label="미해결 이슈"   value={issueStats?.unresolved}     color="red"    icon="🚨" onClick={() => navigate('/admin/issues')} />
             <StatCard label="등록 셀러"     value={sellerCount}               color="blue"   icon="👥" />
+            <StatCard
+              label="배치 피킹"
+              value={stats ? `${stats.batch_today_count}배치 / ${stats.batch_trips_saved}회 절감` : '—'}
+              color="green"
+              icon="🗂️"
+              onClick={() => navigate('/worker/batch-picking')}
+            />
           </div>
 
           {/* Charts row */}
@@ -155,26 +166,36 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5">
+            <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5" style={{ minHeight: '400px' }}>
               <h3 className="text-sm font-semibold mb-4" style={{ color: '#0F172A' }}>채널별 주문 비율</h3>
               {stats && pieData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie data={pieData} cx="45%" cy="50%" outerRadius={80}
-                      dataKey="value" nameKey="name"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      labelLine={false}
+                <ResponsiveContainer width="100%" height={360}>
+                  <PieChart margin={{ top: 20, right: 50, bottom: 20, left: 50 }}>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={120}
+                      dataKey="value"
+                      nameKey="name"
+                      paddingAngle={2}
+                      labelLine={true}
+                      label={({ name, percent, x, y }) => (
+                        <text x={x} y={y} fill="#374151" fontSize={12} fontWeight={500}
+                          textAnchor="middle" dominantBaseline="central">
+                          {`${name} ${(percent * 100).toFixed(0)}%`}
+                        </text>
+                      )}
                     >
                       {pieData.map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Legend iconType="circle" iconSize={10} />
                     <Tooltip formatter={(v, n) => [v + '건', n]} />
                   </PieChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-[220px] flex items-center justify-center text-sm" style={{ color: '#94A3B8' }}>데이터 없음</div>
+                <div className="h-[360px] flex items-center justify-center text-sm" style={{ color: '#94A3B8' }}>데이터 없음</div>
               )}
             </div>
           </div>

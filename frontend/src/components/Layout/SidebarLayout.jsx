@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import useAuthStore from '../../store/authStore'
 import NotificationBell from '../NotificationBell'
 import ChatWidget from '../ChatWidget'
+import AIAssistant from '../AIAssistant'
 
 const ADMIN_MENUS = [
   {
@@ -18,13 +19,18 @@ const ADMIN_MENUS = [
       { icon: '🚚', label: '배송 관리',  path: '/admin/deliveries' },
       { icon: '🗺️', label: '배송 지도',  path: '/admin/delivery-map' },
       { icon: '🔄', label: '반품 관리',  path: '/admin/returns' },
+      { icon: '⚠️', label: '예외/이슈 관리', path: '/admin/issues' },
     ],
   },
   {
     section: '재고',
     items: [
-      { icon: '🏭', label: '재고 관리', path: '/admin/inventory' },
-      { icon: '📈', label: '수요 예측', path: '/admin/forecast' },
+      { icon: '🏭', label: '재고 관리',    path: '/admin/inventory' },
+      { icon: '🗺️', label: '창고 지도',    path: '/admin/warehouse-map' },
+      { icon: '📥', label: '입고 스케줄',  path: '/admin/inbound-schedule' },
+      { icon: '📈', label: '수요 예측',    path: '/admin/forecast' },
+      { icon: '🛒', label: '보충 입고 요청', path: '/admin/restock' },
+      { icon: '📊', label: '슬로팅 최적화', path: '/admin/slotting' },
     ],
   },
   {
@@ -32,6 +38,8 @@ const ADMIN_MENUS = [
     items: [
       { icon: '📅', label: '프로모션 캘린더', path: '/admin/promotions' },
       { icon: '💰', label: '정산 관리',      path: '/admin/settlements' },
+      { icon: '📊', label: 'KPI 리포트',     path: '/admin/kpi' },
+      { icon: '🔧', label: '재고 조정',      path: '/admin/inventory-adjust' },
       { icon: '💬', label: '채팅 관리',      path: '/admin/chat' },
     ],
   },
@@ -47,9 +55,10 @@ const WORKER_MENUS = [
   {
     section: '작업',
     items: [
-      { icon: '✅', label: '피킹 목록', path: '/worker/picking' },
-      { icon: '📥', label: '입고 등록', path: '/worker/inbound' },
-      { icon: '📤', label: '출고 처리', path: '/worker/outbound' },
+      { icon: '✅', label: '피킹 목록',  path: '/worker/picking' },
+      { icon: '🗂️', label: '배치 피킹',  path: '/worker/batch-picking' },
+      { icon: '📥', label: '입고 등록',  path: '/worker/inbound' },
+      { icon: '📤', label: '출고 처리',  path: '/worker/outbound' },
     ],
   },
 ]
@@ -67,6 +76,7 @@ const SELLER_MENUS = [
     items: [
       { icon: '🔍', label: '재고 조회', path: '/seller/inventory' },
       { icon: '📈', label: '수요 예측', path: '/seller/forecast' },
+      { icon: '🛒', label: '보충 입고 요청', path: '/seller/restock' },
       { icon: '📥', label: '입고 요청', path: '/seller/inbound-request' },
     ],
   },
@@ -97,22 +107,31 @@ const PAGE_TITLES = {
   '/admin/deliveries':   '배송 관리',
   '/admin/delivery-map': '배송 지도',
   '/admin/returns':      '반품 관리',
-  '/admin/inventory':    '재고 관리',
-  '/admin/forecast':     '수요 예측',
+  '/admin/inventory':      '재고 관리',
+  '/admin/warehouse-map':  '창고 지도',
+  '/admin/forecast':       '수요 예측',
+  '/admin/inbound-schedule': '입고 스케줄',
+  '/admin/restock':      '보충 입고 요청',
+  '/admin/issues':       '예외/이슈 관리',
+  '/admin/slotting':     '슬로팅 최적화',
   '/admin/channel-sync': '채널 연동',
   '/admin/promotions':   '프로모션 캘린더',
   '/admin/settlements':  '정산 관리',
   '/admin/chat':         '채팅 관리',
   '/admin/sellers':      '셀러 관리',
-  '/worker/dashboard':   '대시보드',
-  '/worker/picking':     '피킹 목록',
-  '/worker/inbound':     '입고 등록',
-  '/worker/outbound':    '출고 처리',
+  '/admin/kpi':          'KPI 리포트',
+  '/admin/inventory-adjust': '재고 조정',
+  '/worker/dashboard':      '대시보드',
+  '/worker/picking':        '피킹 목록',
+  '/worker/batch-picking':  '배치 피킹',
+  '/worker/inbound':        '입고 등록',
+  '/worker/outbound':       '출고 처리',
   '/seller/dashboard':   '대시보드',
   '/seller/orders':      '주문 현황',
   '/seller/deliveries':  '배송 추적',
   '/seller/inventory':   '재고 조회',
   '/seller/forecast':    '수요 예측',
+  '/seller/restock':     '보충 입고 요청',
   '/seller/returns':          '반품 신청',
   '/seller/settlements':      '정산 내역',
   '/seller/promotions':       '프로모션 캘린더',
@@ -247,6 +266,9 @@ export default function SidebarLayout({ children }) {
 
       {/* Floating chat widget (admin + seller only) */}
       {(role === 'ADMIN' || role === 'SELLER') && <ChatWidget />}
+
+      {/* Floating AI assistant (admin only) */}
+      {role === 'ADMIN' && <AIAssistant />}
     </div>
   )
 }

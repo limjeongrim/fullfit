@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
+  LineChart, Line, Legend, ReferenceArea,
 } from 'recharts'
 import api from '../../api/axiosInstance'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
@@ -12,9 +13,20 @@ const RISK_META = {
   LOW:    { label: '안전', cls: 'bg-[#DCFCE7] text-[#166534]' },
 }
 
+const TREND_META = {
+  increasing: { icon: '↑', label: '증가', cls: 'text-[#16A34A] font-semibold' },
+  stable:     { icon: '→', label: '안정', cls: 'text-[#64748B]' },
+  decreasing: { icon: '↓', label: '감소', cls: 'text-[#DC2626] font-semibold' },
+}
+
 function PromoRiskBadge({ risk }) {
   const m = RISK_META[risk] || RISK_META.LOW
   return <span className={`px-2 py-0.5 rounded-full text-xs ${m.cls}`}>{m.label}</span>
+}
+
+function TrendBadge({ trend }) {
+  const m = TREND_META[trend] || TREND_META.stable
+  return <span className={`text-sm ${m.cls}`}>{m.icon} {m.label}</span>
 }
 
 function fmtDays(days) {
@@ -33,48 +45,138 @@ function fmtForecast(value, avgDailySales) {
   return `약 ${value}개`
 }
 
-function DetailModal({ item, onClose, onInbound }) {
+function ChartModal({ item, onClose, onInbound }) {
+  const [predict, setPredict] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.get(`/forecast/predict/${item.product_id}`)
+      .then(r => setPredict(r.data))
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [item.product_id])
+
   const shortage = item.promotion_required_stock - item.current_stock
+
+  const chartData = predict ? [
+    ...predict.history.map(h => ({
+      date: h.date.slice(5),
+      actual: h.quantity,
+      ma7:  predict.ma_7,
+      ma14: predict.ma_14,
+      ma30: predict.ma_30,
+    })),
+    ...predict.forecast_7d.map(f => ({
+      date: f.date.slice(5),
+      actual: null,
+      ma7:  predict.ma_7,
+      ma14: predict.ma_14,
+      ma30: predict.ma_30,
+      forecast: f.quantity,
+    })),
+  ] : []
+
+  const firstFcDate = predict?.forecast_7d[0]?.date.slice(5)
+  const lastFcDate  = predict?.forecast_7d[6]?.date.slice(5)
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="px-6 py-5 border-b border-[#E2E8F0] flex items-center justify-between">
-          <h3 className="font-bold text-lg" style={{ color: '#0F172A' }}>프로모션 리스크 상세</h3>
+          <div>
+            <h3 className="font-bold text-lg" style={{ color: '#0F172A' }}>수요 예측 차트</h3>
+            <p className="text-sm" style={{ color: '#64748B' }}>{item.product_name} <span className="font-mono text-xs">({item.sku})</span></p>
+          </div>
           <button onClick={onClose} className="text-2xl leading-none" style={{ color: '#94A3B8' }}>×</button>
         </div>
+
         <div className="px-6 py-5 space-y-4">
-          <div>
-            <p className="text-xs" style={{ color: '#64748B' }}>상품</p>
-            <p className="font-bold" style={{ color: '#0F172A' }}>{item.product_name} <span className="font-mono text-xs" style={{ color: '#94A3B8' }}>({item.sku})</span></p>
-          </div>
-          {item.upcoming_promotion && (
-            <div className="bg-[#FFF7ED] rounded-xl p-4">
-              <p className="text-xs font-semibold mb-1" style={{ color: '#EA580C' }}>예정 프로모션</p>
-              <p className="font-bold" style={{ color: '#0F172A' }}>{item.upcoming_promotion.name}</p>
-              <p className="text-sm" style={{ color: '#64748B' }}>시작일: {item.upcoming_promotion.start_date}</p>
-              <p className="text-sm" style={{ color: '#64748B' }}>예상 배수: ×{item.upcoming_promotion.multiplier}</p>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-[#F8FAFC] rounded-xl p-3">
-              <p className="text-xs" style={{ color: '#64748B' }}>현재 재고</p>
-              <p className="text-2xl font-bold" style={{ color: '#0F172A' }}>{item.current_stock}개</p>
-            </div>
-            <div className="bg-[#FEF2F2] rounded-xl p-3">
-              <p className="text-xs" style={{ color: '#DC2626' }}>필요 재고</p>
-              <p className="text-2xl font-bold" style={{ color: '#DC2626' }}>{item.promotion_required_stock}개</p>
-            </div>
-          </div>
-          {shortage > 0 && (
-            <div className="bg-[#FEE2E2] rounded-xl p-3 text-center">
-              <p className="text-sm font-medium" style={{ color: '#DC2626' }}>부족 예상:</p>
-              <p className="text-2xl font-bold" style={{ color: '#DC2626' }}>{shortage}개</p>
-            </div>
+          {loading ? (
+            <div className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>로딩 중...</div>
+          ) : predict ? (
+            <>
+              {/* MA stats */}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: '7일 평균',  val: predict.ma_7,  mape: predict.mape_7,  win: 7,  color: '#F97316' },
+                  { label: '14일 평균', val: predict.ma_14, mape: predict.mape_14, win: 14, color: '#22C55E' },
+                  { label: '30일 평균', val: predict.ma_30, mape: predict.mape_30, win: 30, color: '#A855F7' },
+                ].map(({ label, val, mape, win, color }) => {
+                  const isRec = predict.recommended_window === win
+                  const accuracy = Math.max(0, 100 - mape).toFixed(1)
+                  return (
+                    <div key={label}
+                      className={`rounded-xl p-3 border ${isRec ? 'border-2' : 'border'}`}
+                      style={{ backgroundColor: color + '15', borderColor: isRec ? color : '#E2E8F0' }}>
+                      <p className="text-xs font-semibold" style={{ color }}>
+                        {label}{isRec && ' ★ 권장 기준'}
+                      </p>
+                      <p className="text-lg font-bold" style={{ color: '#0F172A' }}>{val}/일</p>
+                      <p className="text-xs" style={{ color: '#64748B' }}>예측 정확도 {accuracy}%</p>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Line Chart */}
+              <div>
+                <p className="text-xs font-semibold mb-2" style={{ color: '#64748B' }}>
+                  최근 30일 실적 + 7일 예측 (음영 구간)
+                </p>
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={chartData} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={4} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    {firstFcDate && lastFcDate && (
+                      <ReferenceArea x1={firstFcDate} x2={lastFcDate} fill="#EFF6FF" fillOpacity={0.7} />
+                    )}
+                    <Line type="monotone" dataKey="actual"   name="실제 판매" stroke="#2563EB" strokeWidth={2} dot={false} connectNulls={false} />
+                    <Line type="monotone" dataKey="forecast" name="7일 예측"   stroke="#2563EB" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3 }} connectNulls={false} />
+                    <Line type="monotone" dataKey="ma7"  name="7일 평균"  stroke="#F97316" strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
+                    <Line type="monotone" dataKey="ma14" name="14일 평균" stroke="#22C55E" strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
+                    <Line type="monotone" dataKey="ma30" name="30일 평균" stroke="#A855F7" strokeWidth={1.5} strokeDasharray="6 3" dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Promo detail for HIGH risk */}
+              {item.promotion_risk === 'HIGH' && item.upcoming_promotion && (
+                <div className="bg-[#FFF7ED] rounded-xl p-4">
+                  <p className="text-xs font-semibold mb-2" style={{ color: '#EA580C' }}>예정 프로모션</p>
+                  <p className="font-bold" style={{ color: '#0F172A' }}>{item.upcoming_promotion.name}</p>
+                  <p className="text-sm mb-3" style={{ color: '#64748B' }}>
+                    시작일: {item.upcoming_promotion.start_date} · 예상 배수: ×{item.upcoming_promotion.multiplier}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-[#F8FAFC] rounded-xl p-3">
+                      <p className="text-xs" style={{ color: '#64748B' }}>현재 재고</p>
+                      <p className="text-2xl font-bold" style={{ color: '#0F172A' }}>{item.current_stock}개</p>
+                    </div>
+                    <div className="bg-[#FEF2F2] rounded-xl p-3">
+                      <p className="text-xs" style={{ color: '#DC2626' }}>필요 재고</p>
+                      <p className="text-2xl font-bold" style={{ color: '#DC2626' }}>{item.promotion_required_stock}개</p>
+                    </div>
+                  </div>
+                  {shortage > 0 && (
+                    <div className="mt-3 bg-[#FEE2E2] rounded-xl p-3 text-center">
+                      <p className="text-sm font-medium" style={{ color: '#DC2626' }}>부족 예상:</p>
+                      <p className="text-2xl font-bold" style={{ color: '#DC2626' }}>{shortage}개</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>예측 데이터가 없습니다.</div>
           )}
         </div>
+
         <div className="px-6 py-4 border-t border-[#E2E8F0] flex gap-3">
           <button onClick={onClose}
-            className="flex-1 px-4 py-2 border border-[#E2E8F0] rounded-[6px] text-sm text-[#374151] hover:bg-[#F8FAFC]">취소</button>
+            className="flex-1 px-4 py-2 border border-[#E2E8F0] rounded-[6px] text-sm text-[#374151] hover:bg-[#F8FAFC]">닫기</button>
           <button onClick={onInbound}
             className="flex-1 px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-[6px] text-sm font-semibold">
             입고 등록
@@ -90,22 +192,32 @@ export default function AdminForecastPage() {
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [riskFilter, setRiskFilter] = useState('ALL')
-  const [detailItem, setDetailItem] = useState(null)
+  const [selectedItem, setSelectedItem] = useState(null)
 
   useEffect(() => {
-    api.get('/stats/demand-forecast')
+    api.get('/forecast/summary')
       .then(r => setData(r.data))
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
 
-  const highRiskCount = data.filter(d => d.promotion_risk === 'HIGH').length
   const reorderCount  = data.filter(d => d.reorder_recommended).length
+  const safeCount     = data.filter(d => !d.reorder_recommended).length
+  const highRiskCount = data.filter(d => d.promotion_risk === 'HIGH').length
   const criticalCount = data.filter(d => d.days_of_stock < 7 && d.days_of_stock !== 999).length
+  const avgMape       = data.length > 0
+    ? (data.reduce((s, d) => s + d.mape, 0) / data.length).toFixed(1)
+    : 0
 
-  const filtered = riskFilter === 'ALL' ? data
-    : riskFilter === 'HIGH' ? data.filter(d => d.promotion_risk === 'HIGH')
-    : data.filter(d => d.promotion_risk === 'MEDIUM')
+  const isDanger  = (d) => (d.days_of_stock < 14 && d.days_of_stock !== 999) || d.promotion_risk === 'HIGH'
+  const isCaution = (d) => (d.days_of_stock >= 14 && d.days_of_stock < 30 && d.days_of_stock !== 999) || d.promotion_risk === 'MEDIUM'
+
+  const dangerCount  = data.filter(isDanger).length
+  const cautionCount = data.filter(isCaution).length
+
+  const filtered = riskFilter === 'ALL'    ? data
+    : riskFilter === 'DANGER'  ? data.filter(isDanger)
+    : data.filter(isCaution)
 
   const chartData = data.slice(0, 10).map(d => ({
     name: d.product_name.length > 8 ? d.product_name.slice(0, 8) + '…' : d.product_name,
@@ -124,9 +236,25 @@ export default function AdminForecastPage() {
     <SidebarLayout>
       <div className="min-h-screen bg-[#F8FAFC]">
         <div className="px-6 py-6">
-          <div className="mb-6">
+          <div className="mb-5">
             <h2 className="text-2xl font-bold" style={{ color: '#0F172A' }}>수요 예측 분석</h2>
-            <p className="mt-1 text-sm" style={{ color: '#64748B' }}>최근 30일 평균 판매량 기준 재고 소진 예측 + 프로모션 리스크 분석</p>
+            <p className="mt-1 text-sm" style={{ color: '#64748B' }}>이동평균(MA) 기반 수요 예측 + 프로모션 리스크 분석</p>
+          </div>
+
+          {/* Stats bar */}
+          <div className="flex flex-wrap gap-3 mb-5">
+            <div className="flex items-center gap-2 bg-[#FEF2F2] border border-[#FECACA] rounded-lg px-4 py-2">
+              <span className="text-sm font-semibold text-[#991B1B]">발주 필요</span>
+              <span className="text-lg font-bold text-[#DC2626]">{reorderCount}개 상품</span>
+            </div>
+            <div className="flex items-center gap-2 bg-[#F0FDF4] border border-[#BBF7D0] rounded-lg px-4 py-2">
+              <span className="text-sm font-semibold text-[#166534]">안전 재고</span>
+              <span className="text-lg font-bold text-[#16A34A]">{safeCount}개 상품</span>
+            </div>
+            <div className="flex items-center gap-2 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg px-4 py-2">
+              <span className="text-sm font-semibold text-[#1D4ED8]">평균 예측 정확도</span>
+              <span className="text-lg font-bold text-[#2563EB]">{(100 - Number(avgMape)).toFixed(1)}%</span>
+            </div>
           </div>
 
           {highRiskCount > 0 && (
@@ -138,6 +266,7 @@ export default function AdminForecastPage() {
             </div>
           )}
 
+          {/* KPI cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-lg border border-[#E2E8F0] p-4 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
               <p className="text-sm mb-1" style={{ color: '#64748B' }}>전체 상품</p>
@@ -157,6 +286,7 @@ export default function AdminForecastPage() {
             </div>
           </div>
 
+          {/* Bar chart */}
           {chartData.length > 0 && (
             <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5 mb-6">
               <h3 className="text-sm font-semibold mb-4" style={{ color: '#0F172A' }}>재고 소진일수 TOP 10</h3>
@@ -178,8 +308,13 @@ export default function AdminForecastPage() {
             </div>
           )}
 
+          {/* Filter */}
           <div className="flex gap-2 mb-4">
-            {[['ALL', '전체'], ['HIGH', '위험만'], ['MEDIUM', '주의만']].map(([k, v]) => (
+            {[
+              ['ALL',     `전체 (${data.length})`],
+              ['DANGER',  `위험 (${dangerCount})`],
+              ['CAUTION', `주의 (${cautionCount})`],
+            ].map(([k, v]) => (
               <button key={k} onClick={() => setRiskFilter(k)}
                 className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   riskFilter === k ? 'bg-[#2563EB] text-white' : 'bg-white border border-[#E2E8F0] text-[#374151] hover:bg-[#F8FAFC]'
@@ -187,20 +322,21 @@ export default function AdminForecastPage() {
             ))}
           </div>
 
+          {/* Table */}
           <div className="bg-white rounded-lg border border-[#E2E8F0] overflow-x-auto shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
             <table className="w-full text-sm">
               <thead className="bg-[#F8FAFC]">
                 <tr>
-                  {['상품명', 'SKU', '현재재고', '일평균판매', '소진일수', '7일예측', '재고상태', '프로모션 리스크', '예정 프로모션', '조치'].map(h => (
+                  {['상품명', 'SKU', '현재재고', '일평균판매', '예상 소진일', '추세', '7일예측', '재고상태', '프로모션 리스크', '권장 기준', '예측 정확도', '예정 프로모션', '조치'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide whitespace-nowrap border-b border-[#E2E8F0]" style={{ color: '#64748B' }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={10} className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>로딩 중...</td></tr>
+                  <tr><td colSpan={13} className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>로딩 중...</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={10} className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>데이터가 없습니다.</td></tr>
+                  <tr><td colSpan={13} className="text-center py-10 text-sm" style={{ color: '#94A3B8' }}>데이터가 없습니다.</td></tr>
                 ) : (
                   filtered.map(d => {
                     const isCritical = d.days_of_stock < 7 && d.days_of_stock !== 999
@@ -208,9 +344,9 @@ export default function AdminForecastPage() {
                     const daysFmt = fmtDays(d.days_of_stock)
                     return (
                       <tr key={d.product_id}
-                        onClick={() => d.promotion_risk === 'HIGH' && setDetailItem(d)}
-                        className={`border-b border-[#F1F5F9] transition-colors ${
-                          d.promotion_risk === 'HIGH' ? 'bg-[#FEF2F2] hover:bg-[#FEE2E2] cursor-pointer' :
+                        onClick={() => setSelectedItem(d)}
+                        className={`border-b border-[#F1F5F9] transition-colors cursor-pointer ${
+                          d.promotion_risk === 'HIGH' ? 'bg-[#FEF2F2] hover:bg-[#FEE2E2]' :
                           isCritical ? 'bg-[#FFF7ED] hover:bg-[#FFEDD5]' :
                           isWarn ? 'bg-[#FEFCE8] hover:bg-[#FEF9C3]' : 'hover:bg-[#F8FAFC]'
                         }`}>
@@ -223,6 +359,7 @@ export default function AdminForecastPage() {
                         <td className="px-4 py-3 font-bold text-lg">
                           <span className={daysFmt.cls}>{daysFmt.text}</span>
                         </td>
+                        <td className="px-4 py-3"><TrendBadge trend={d.trend} /></td>
                         <td className="px-4 py-3" style={{ color: '#64748B' }}>{fmtForecast(d.forecast_7day, d.avg_daily_sales)}</td>
                         <td className="px-4 py-3">
                           {isCritical
@@ -232,6 +369,10 @@ export default function AdminForecastPage() {
                             : <span className="px-2 py-0.5 rounded-full text-xs bg-[#DCFCE7] text-[#166534]">정상</span>}
                         </td>
                         <td className="px-4 py-3"><PromoRiskBadge risk={d.promotion_risk} /></td>
+                        <td className="px-4 py-3">
+                          <span className="px-2 py-0.5 rounded-full text-xs bg-[#EFF6FF] text-[#1D4ED8] font-medium">{d.recommended_window}일 평균</span>
+                        </td>
+                        <td className="px-4 py-3 text-xs font-semibold" style={{ color: '#64748B' }}>정확도 {Math.max(0, 100 - d.mape).toFixed(1)}%</td>
                         <td className="px-4 py-3 text-xs whitespace-nowrap" style={{ color: '#64748B' }}>
                           {d.upcoming_promotion ? `${d.upcoming_promotion.name} (${d.upcoming_promotion.start_date})` : '—'}
                         </td>
@@ -254,16 +395,16 @@ export default function AdminForecastPage() {
               </tbody>
             </table>
           </div>
-          {riskFilter === 'ALL' && filtered.length > 0 && (
-            <p className="text-xs mt-2" style={{ color: '#94A3B8' }}>위험 행 클릭 시 상세 보기</p>
+          {filtered.length > 0 && (
+            <p className="text-xs mt-2" style={{ color: '#94A3B8' }}>행 클릭 시 MA 예측 차트 상세 보기</p>
           )}
         </div>
 
-        {detailItem && (
-          <DetailModal
-            item={detailItem}
-            onClose={() => setDetailItem(null)}
-            onInbound={() => { setDetailItem(null); navigate('/admin/inventory') }}
+        {selectedItem && (
+          <ChartModal
+            item={selectedItem}
+            onClose={() => setSelectedItem(null)}
+            onInbound={() => { setSelectedItem(null); navigate('/admin/inventory') }}
           />
         )}
       </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
@@ -55,8 +56,72 @@ function LastUpdated({ time }) {
   return <span className="text-xs" style={{ color: '#94A3B8' }}>마지막 업데이트: {display}</span>
 }
 
+function ActionCenter({ stats, navigate }) {
+  const actions = []
+
+  if (stats?.low_stock_count > 0) {
+    actions.push({
+      icon: '⚠️',
+      text: `재고 부족 ${stats.low_stock_count}개 상품 → 보충 입고 요청`,
+      color: 'bg-[#FFF7ED] border-[#FED7AA] text-[#9A3412]',
+      onClick: () => navigate('/seller/inbound-request'),
+    })
+  }
+  if (stats?.expiry_alert_count > 0) {
+    actions.push({
+      icon: '⏰',
+      text: `유통기한 임박 ${stats.expiry_alert_count}개 상품 → 재고 확인`,
+      color: 'bg-[#FEF2F2] border-[#FECACA] text-[#991B1B]',
+      onClick: () => navigate('/seller/inventory'),
+    })
+  }
+  if (stats?.pending_return_count > 0) {
+    actions.push({
+      icon: '📦',
+      text: `반품 접수 ${stats.pending_return_count}건 처리 대기`,
+      color: 'bg-[#EFF6FF] border-[#BFDBFE] text-[#1D4ED8]',
+      onClick: () => navigate('/seller/returns'),
+    })
+  }
+  if (stats?.unconfirmed_settlement_count > 0) {
+    actions.push({
+      icon: '💰',
+      text: `정산 미확정 ${stats.unconfirmed_settlement_count}건 확인 필요`,
+      color: 'bg-[#F0FDF4] border-[#BBF7D0] text-[#166534]',
+      onClick: () => navigate('/seller/settlements'),
+    })
+  }
+
+  return (
+    <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5 mb-6">
+      <h3 className="text-sm font-bold mb-3" style={{ color: '#0F172A' }}>지금 해야 할 일</h3>
+      {actions.length === 0 ? (
+        <div className="flex items-center gap-2 text-sm" style={{ color: '#16A34A' }}>
+          <span className="text-lg">✅</span>
+          <span className="font-medium">현재 처리가 필요한 항목이 없습니다</span>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {actions.map((a, i) => (
+            <button
+              key={i}
+              onClick={a.onClick}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border text-sm font-medium text-left hover:opacity-80 transition-opacity ${a.color}`}
+            >
+              <span className="text-base">{a.icon}</span>
+              <span>{a.text}</span>
+              <span className="ml-auto text-xs opacity-60">→</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SellerDashboard() {
   const { user } = useAuthStore()
+  const navigate = useNavigate()
   const [stats, setStats] = useState(null)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [tick, setTick] = useState(0)
@@ -85,7 +150,7 @@ export default function SellerDashboard() {
           <div className="mb-5">
             <div className="flex items-center gap-3">
               <h2 className="text-xl font-bold" style={{ color: '#0F172A' }}>
-                안녕하세요, {user?.full_name}님
+                {user?.full_name ? `${user.full_name} 브랜드 센터` : `안녕하세요, ${user?.full_name}님`}
               </h2>
               <LiveIndicator />
             </div>
@@ -94,6 +159,9 @@ export default function SellerDashboard() {
               <LastUpdated time={lastUpdated} />
             </div>
           </div>
+
+          {/* Action center */}
+          <ActionCenter stats={stats} navigate={navigate} />
 
           {/* Stats cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

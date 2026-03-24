@@ -1,18 +1,20 @@
+import calendar
 from datetime import datetime
 from decimal import Decimal
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from backend.database import get_db
 from backend.models.user import User, UserRole
 from backend.models.product import Product
 from backend.models.inventory import Inventory
 from backend.models.inbound import Inbound
 from backend.models.order import Order, OrderStatus
+from backend.models.order_item import OrderItem
 from backend.models.settlement import Settlement, SettlementStatus
 from backend.schemas.settlement import SettlementGenerate, SettlementResponse
-from backend.core.dependencies import require_role
+from backend.core.dependencies import get_current_user, require_role
 from backend.core.notify import create_notification
 from backend.models.notification import NotificationType
 
@@ -64,6 +66,103 @@ def list_settlements_seller(
     return [_to_response(s) for s in rows]
 
 
+@router.get("/settlements/{settlement_id}/detail")
+def get_settlement_detail(
+    settlement_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    s = db.query(Settlement).filter(Settlement.id == settlement_id).first()
+    if not s:
+        raise HTTPException(status_code=404, detail="정산을 찾을 수 없습니다.")
+    if current_user.role == UserRole.SELLER and s.seller_id != current_user.id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+
+    ym = s.year_month
+    seller = db.query(User).filter(User.id == s.seller_id).first()
+    year, month = map(int, ym.split("-"))
+    days_in_month = calendar.monthrange(year, month)[1]
+    period = f"{year}년 {month}월"
+
+    # Outbound items: DELIVERED/SHIPPED orders in this month
+    orders = (
+        db.query(Order)
+        .options(joinedload(Order.items).joinedload(OrderItem.product))
+        .filter(
+            Order.seller_id == s.seller_id,
+            Order.status.in_([OrderStatus.DELIVERED, OrderStatus.SHIPPED]),
+            func.strftime("%Y-%m", Order.updated_at) == ym,
+        )
+        .limit(30)
+        .all()
+    )
+    outbound_items = []
+    for o in orders:
+        for item in o.items:
+            outbound_items.append({
+                "order_number": o.order_number,
+                "product_name": item.product.name,
+                "quantity": item.quantity,
+                "unit_price": 900,
+                "total": item.quantity * 900,
+                "date": (o.updated_at.strftime("%Y-%m-%d") if o.updated_at else f"{ym}-01"),
+            })
+
+    # Storage items: current inventory per product
+    products = db.query(Product).filter(Product.seller_id == s.seller_id).all()
+    storage_items = []
+    for p in products:
+        inv = db.query(Inventory).filter(Inventory.product_id == p.id).first()
+        if inv and inv.quantity > 0:
+            unit = 50
+            total = round(inv.quantity * days_in_month * unit / 1000)
+            storage_items.append({
+                "product_name": p.name,
+                "avg_stock": inv.quantity,
+                "days": days_in_month,
+                "unit_price": unit,
+                "total": total,
+            })
+
+    # Inbound items: records in this month
+    inbound_records = (
+        db.query(Inbound)
+        .join(Product)
+        .filter(
+            Product.seller_id == s.seller_id,
+            func.strftime("%Y-%m", Inbound.inbound_date) == ym,
+        )
+        .all()
+    )
+    inbound_items = []
+    for inb in inbound_records:
+        prod = db.query(Product).filter(Product.id == inb.product_id).first()
+        inbound_items.append({
+            "date": inb.inbound_date.strftime("%Y-%m-%d"),
+            "product_name": prod.name if prod else "—",
+            "quantity": inb.quantity,
+            "type": "입고",
+            "unit_price": 300,
+            "total": inb.quantity * 300,
+        })
+
+    return {
+        "seller_name": seller.full_name if seller else "—",
+        "period": period,
+        "summary": {
+            "total": float(s.total_fee),
+            "storage_fee": float(s.storage_fee),
+            "inbound_fee": float(s.inbound_fee),
+            "outbound_fee": float(s.outbound_fee),
+            "extra_fee": float(s.extra_fee),
+        },
+        "status": s.status.value if hasattr(s.status, "value") else s.status,
+        "outbound_items": outbound_items,
+        "storage_items": storage_items,
+        "inbound_items": inbound_items,
+    }
+
+
 @router.post("/settlements/generate", response_model=SettlementResponse)
 def generate_settlement(
     data: SettlementGenerate,
@@ -80,9 +179,7 @@ def generate_settlement(
     ).first():
         raise HTTPException(status_code=400, detail="해당 월 정산이 이미 존재합니다.")
 
-    ym = data.year_month  # "2026-03"
-
-    # storage_fee: current inventory LOT count × 500
+    ym = data.year_month
     storage_count = (
         db.query(func.count(Inventory.id))
         .join(Product)
@@ -91,7 +188,6 @@ def generate_settlement(
     )
     storage_fee = Decimal(storage_count) * Decimal("500")
 
-    # inbound_fee: inbound records in this month × 300
     inbound_count = (
         db.query(func.count(Inbound.id))
         .join(Product)
@@ -103,7 +199,6 @@ def generate_settlement(
     )
     inbound_fee = Decimal(inbound_count) * Decimal("300")
 
-    # outbound_fee: delivered orders in this month × 1200
     outbound_count = (
         db.query(func.count(Order.id))
         .filter(
@@ -131,7 +226,6 @@ def generate_settlement(
     db.add(s)
     db.commit()
     db.refresh(s)
-    # reload with relationship
     s = db.query(Settlement).filter(Settlement.id == s.id).first()
     return _to_response(s)
 

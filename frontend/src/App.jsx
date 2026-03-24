@@ -30,6 +30,15 @@ import SellerPromotionPage from './pages/seller/PromotionPage'
 import SellerForecastPage from './pages/seller/ForecastPage'
 import SellerChannelSyncPage from './pages/seller/ChannelSyncPage'
 import SellerInboundRequestPage from './pages/seller/InboundRequestPage'
+import AdminRestockPage from './pages/admin/RestockPage'
+import SellerRestockPage from './pages/seller/RestockPage'
+import IssuePage from './pages/admin/IssuePage'
+import BatchPickingPage from './pages/worker/BatchPickingPage'
+import WarehouseMapPage from './pages/admin/WarehouseMapPage'
+import SlottingPage from './pages/admin/SlottingPage'
+import InboundSchedulePage from './pages/admin/InboundSchedulePage'
+import KPIReportPage from './pages/admin/KPIReportPage'
+import InventoryAdjustPage from './pages/admin/InventoryAdjustPage'
 
 export default function App() {
   const loadFromStorage = useAuthStore((s) => s.loadFromStorage)
@@ -50,7 +59,10 @@ export default function App() {
             <ProtectedRoute allowedRoles={['ADMIN']}>
               <Routes>
                 <Route path="dashboard"    element={<AdminDashboard />} />
-                <Route path="inventory"    element={<AdminInventoryPage />} />
+                <Route path="inventory"     element={<AdminInventoryPage />} />
+                <Route path="warehouse-map" element={<WarehouseMapPage />} />
+                <Route path="slotting"          element={<SlottingPage />} />
+                <Route path="inbound-schedule" element={<InboundSchedulePage />} />
                 <Route path="orders"       element={<AdminOrderPage />} />
                 <Route path="deliveries"   element={<AdminDeliveryPage />} />
                 <Route path="settlements"  element={<AdminSettlementPage />} />
@@ -58,9 +70,14 @@ export default function App() {
                 <Route path="channel-sync" element={<AdminChannelSyncPage />} />
                 <Route path="promotions"   element={<AdminPromotionPage />} />
                 <Route path="forecast"     element={<AdminForecastPage />} />
+                <Route path="restock"      element={<AdminRestockPage />} />
+                <Route path="reorder"      element={<Navigate to="../restock" replace />} />
+                <Route path="issues"       element={<IssuePage />} />
                 <Route path="sellers"       element={<SellerManagementPage />} />
                 <Route path="chat"         element={<AdminChatPage />} />
                 <Route path="delivery-map" element={<DeliveryMapPage />} />
+                <Route path="kpi"          element={<KPIReportPage />} />
+                <Route path="inventory-adjust" element={<InventoryAdjustPage />} />
                 <Route path="*" element={<Navigate to="dashboard" replace />} />
               </Routes>
             </ProtectedRoute>
@@ -73,9 +90,10 @@ export default function App() {
             <ProtectedRoute allowedRoles={['WORKER']}>
               <Routes>
                 <Route path="dashboard" element={<WorkerDashboard />} />
-                <Route path="picking"   element={<PickingPage />} />
-                <Route path="inbound"   element={<InboundPage />} />
-                <Route path="outbound"  element={<OutboundPage />} />
+                <Route path="picking"       element={<PickingPage />} />
+                <Route path="batch-picking" element={<BatchPickingPage />} />
+                <Route path="inbound"       element={<InboundPage />} />
+                <Route path="outbound"      element={<OutboundPage />} />
                 <Route path="*" element={<Navigate to="dashboard" replace />} />
               </Routes>
             </ProtectedRoute>
@@ -95,6 +113,8 @@ export default function App() {
                 <Route path="returns"     element={<SellerReturnPage />} />
                 <Route path="promotions"      element={<SellerPromotionPage />} />
                 <Route path="forecast"        element={<SellerForecastPage />} />
+                <Route path="restock"         element={<SellerRestockPage />} />
+                <Route path="reorder"         element={<Navigate to="../restock" replace />} />
                 <Route path="channel-sync"    element={<SellerChannelSyncPage />} />
                 <Route path="inbound-request" element={<SellerInboundRequestPage />} />
                 <Route path="*" element={<Navigate to="dashboard" replace />} />

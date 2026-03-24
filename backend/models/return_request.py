@@ -7,6 +7,7 @@ from backend.models.user import Base
 
 class ReturnReason(str, enum.Enum):
     DEFECTIVE = "DEFECTIVE"
+    DAMAGED = "DAMAGED"
     WRONG_ITEM = "WRONG_ITEM"
     CHANGE_OF_MIND = "CHANGE_OF_MIND"
     OTHER = "OTHER"
