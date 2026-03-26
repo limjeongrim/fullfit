@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import api from '../../api/axiosInstance'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
 
@@ -131,25 +131,55 @@ function BatchCard({ batch, onStart, onComplete }) {
   )
 }
 
+function LastAutoGen({ time }) {
+  const [display, setDisplay] = useState(null)
+  useEffect(() => {
+    const update = () => {
+      if (!time) { setDisplay(null); return }
+      const diff = Math.floor((Date.now() - time) / 1000)
+      if (diff < 10) setDisplay('방금 전')
+      else if (diff < 60) setDisplay(`${diff}초 전`)
+      else setDisplay(`${Math.floor(diff / 60)}분 전`)
+    }
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [time])
+  if (!display) return null
+  return (
+    <span className="text-xs" style={{ color: '#94A3B8' }}>마지막 자동 생성: {display}</span>
+  )
+}
+
 export default function BatchPickingPage() {
   const [stats, setStats]       = useState(null)
   const [batches, setBatches]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [generating, setGenerating] = useState(false)
   const [genResult, setGenResult]   = useState(null)
+  const [lastAutoGen, setLastAutoGen] = useState(null)
+  const prevBatchCount = useRef(null)
 
-  function loadAll() {
-    setLoading(true)
+  function loadAll(isPolling = false) {
+    if (!isPolling) setLoading(true)
     Promise.all([
       api.get('/batch-picking/stats'),
       api.get('/batch-picking/list'),
     ]).then(([s, b]) => {
       setStats(s.data)
       setBatches(b.data)
-    }).catch(console.error).finally(() => setLoading(false))
+      if (isPolling && prevBatchCount.current !== null && b.data.length > prevBatchCount.current) {
+        setLastAutoGen(Date.now())
+      }
+      prevBatchCount.current = b.data.length
+    }).catch(console.error).finally(() => { if (!isPolling) setLoading(false) })
   }
 
-  useEffect(() => { loadAll() }, [])
+  useEffect(() => {
+    loadAll()
+    const id = setInterval(() => loadAll(true), 15000)
+    return () => clearInterval(id)
+  }, [])
 
   function handleGenerate() {
     setGenerating(true)
@@ -186,6 +216,16 @@ export default function BatchPickingPage() {
             </p>
           </div>
 
+          {/* Auto-generation info banner */}
+          <div className="mb-4 flex items-center gap-3 bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg px-4 py-3">
+            <span className="text-base">🗂️</span>
+            <div className="flex-1 text-sm" style={{ color: '#1D4ED8' }}>
+              <span className="font-semibold">자동 배치 생성:</span>{' '}
+              RECEIVED 주문 10건 이상 시 자동으로 배치가 생성됩니다.
+            </div>
+            <LastAutoGen time={lastAutoGen} />
+          </div>
+
           {/* Header stats */}
           <div className="flex flex-wrap gap-3 mb-5">
             <StatPill label="대기 배치"    value={`${stats?.pending_count ?? '—'}건`}    color="blue" />
@@ -200,7 +240,7 @@ export default function BatchPickingPage() {
               disabled={generating}
               className="px-5 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] disabled:bg-[#93C5FD] text-white rounded-lg text-sm font-semibold transition-colors"
             >
-              {generating ? '배치 생성 중…' : '+ 배치 생성'}
+              {generating ? '배치 생성 중…' : '+ 수동 배치 생성'}
             </button>
             {genResult && (
               <span className={`text-sm font-medium ${genResult.created > 0 ? 'text-[#16A34A]' : 'text-[#64748B]'}`}>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
@@ -34,9 +34,10 @@ export default function OutboundPage() {
   const [modalErr, setModalErr] = useState('')
 
   const todayStr = new Date().toISOString().slice(0, 10)
+  const prevPackedCount = useRef(null)
 
-  const fetchOrders = async () => {
-    setLoading(true)
+  const fetchOrders = async (isPolling = false) => {
+    if (!isPolling) setLoading(true)
     try {
       const res = await api.get('/orders/?limit=200')
       const packed = res.data.items
@@ -45,14 +46,27 @@ export default function OutboundPage() {
       const shipped = res.data.items
         .filter((o) => o.status === 'SHIPPED' && o.created_at.slice(0, 10) === todayStr)
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      if (isPolling && prevPackedCount.current !== null) {
+        const added = packed.length - prevPackedCount.current
+        if (added > 0) {
+          addToast('info', `출고 대기 주문 ${added}건`)
+        }
+      }
+      prevPackedCount.current = packed.length
       setPackedOrders(packed)
       setShippedToday(shipped)
+    } catch (e) {
+      if (!isPolling) console.error(e)
     } finally {
-      setLoading(false)
+      if (!isPolling) setLoading(false)
     }
   }
 
-  useEffect(() => { fetchOrders() }, [])
+  useEffect(() => {
+    fetchOrders()
+    const id = setInterval(() => fetchOrders(true), 15000)
+    return () => clearInterval(id)
+  }, [])
 
   const openConfirmModal = (orderId) => {
     setTrackingNum('')

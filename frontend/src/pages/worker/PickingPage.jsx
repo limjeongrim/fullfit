@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
@@ -245,9 +245,10 @@ export default function PickingPage() {
   const [exceptionSubmitting, setExceptionSubmitting] = useState(false)
 
   const todayStr = new Date().toISOString().slice(0, 10)
+  const prevReceivedCount = useRef(null)
 
-  const fetchOrders = async () => {
-    setLoading(true)
+  const fetchOrders = async (isPolling = false) => {
+    if (!isPolling) setLoading(true)
     try {
       const res = await api.get('/orders/?limit=200')
       const relevant = res.data.items.filter((o) =>
@@ -256,13 +257,27 @@ export default function PickingPage() {
         o.status === 'PACKED' ||
         (o.status === 'SHIPPED' && o.created_at.slice(0, 10) === todayStr)
       )
+      if (isPolling && prevReceivedCount.current !== null) {
+        const newCount = relevant.filter(o => o.status === 'RECEIVED').length
+        const added = newCount - prevReceivedCount.current
+        if (added > 0) {
+          addToast('info', `새 주문 ${added}건이 추가되었습니다`)
+        }
+      }
+      prevReceivedCount.current = relevant.filter(o => o.status === 'RECEIVED').length
       setOrders(relevant)
+    } catch (e) {
+      if (!isPolling) console.error(e)
     } finally {
-      setLoading(false)
+      if (!isPolling) setLoading(false)
     }
   }
 
-  useEffect(() => { fetchOrders() }, [])
+  useEffect(() => {
+    fetchOrders()
+    const id = setInterval(() => fetchOrders(true), 15000)
+    return () => clearInterval(id)
+  }, [])
 
   const handleStartPicking = async (orderId) => {
     setActing(orderId)

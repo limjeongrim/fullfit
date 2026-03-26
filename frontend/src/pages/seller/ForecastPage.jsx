@@ -181,18 +181,58 @@ function ChartModal({ item, onClose, onInbound }) {
   )
 }
 
+function LiveIndicator() {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+      </span>
+      <span className="text-xs font-medium" style={{ color: '#64748B' }}>실시간</span>
+    </span>
+  )
+}
+
+function LastUpdated({ time }) {
+  const [display, setDisplay] = useState('—')
+  useEffect(() => {
+    const update = () => {
+      if (!time) { setDisplay('—'); return }
+      const diff = Math.floor((Date.now() - time) / 1000)
+      if (diff < 10) setDisplay('방금 전')
+      else if (diff < 60) setDisplay(`${diff}초 전`)
+      else if (diff < 3600) setDisplay(`${Math.floor(diff / 60)}분 전`)
+      else setDisplay(new Date(time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))
+    }
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [time])
+  return <span className="text-xs" style={{ color: '#94A3B8' }}>마지막 업데이트: {display}</span>
+}
+
 export default function SellerForecastPage() {
   const navigate = useNavigate()
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState(null)
   const [riskFilter, setRiskFilter] = useState('ALL')
+  const [lastUpdated, setLastUpdated] = useState(null)
+
+  const fetchForecast = async () => {
+    try {
+      const r = await api.get('/forecast/summary')
+      setData(r.data)
+      setLastUpdated(Date.now())
+    } catch (e) { console.error(e) } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    api.get('/forecast/summary')
-      .then(r => setData(r.data))
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    fetchForecast()
+    const id = setInterval(fetchForecast, 60000)
+    return () => clearInterval(id)
   }, [])
 
   const reorderCount  = data.filter(d => d.reorder_recommended).length
@@ -231,8 +271,14 @@ export default function SellerForecastPage() {
       <div className="min-h-screen bg-[#F8FAFC]">
         <div className="px-6 py-6">
           <div className="mb-5">
-            <h2 className="text-2xl font-bold" style={{ color: '#0F172A' }}>수요 예측 분석</h2>
-            <p className="mt-1 text-sm" style={{ color: '#64748B' }}>이동평균 기반 수요 예측 + 재고 소진 분석</p>
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-bold" style={{ color: '#0F172A' }}>수요 예측 분석</h2>
+              <LiveIndicator />
+            </div>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-sm" style={{ color: '#64748B' }}>이동평균 기반 수요 예측 + 재고 소진 분석</p>
+              <LastUpdated time={lastUpdated} />
+            </div>
           </div>
 
           {/* Stats bar */}

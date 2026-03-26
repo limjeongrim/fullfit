@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -20,7 +20,7 @@ const CHANNEL_LABELS = {
   ZIGZAG: '지그재그', CAFE24: '카페24', MANUAL: '수동',
 }
 
-function StatCard({ label, value, icon, color, onClick }) {
+function StatCard({ label, value, icon, color, onClick, flashing }) {
   const iconCls = {
     blue:   'text-[#2563EB]',
     yellow: 'text-[#D97706]',
@@ -31,15 +31,16 @@ function StatCard({ label, value, icon, color, onClick }) {
   return (
     <div
       onClick={onClick}
-      className={`bg-white border border-[#E2E8F0] rounded-lg p-5 shadow-[0_1px_3px_rgba(0,0,0,0.06)] ${
-        onClick ? 'cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-shadow' : ''
-      }`}
+      className={`border border-[#E2E8F0] rounded-lg p-5 shadow-[0_1px_3px_rgba(0,0,0,0.06)] transition-colors duration-500 ${
+        flashing ? 'bg-[#F0FDF4]' : 'bg-white'
+      } ${onClick ? 'cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)]' : ''}`}
     >
       <div className="flex items-center justify-between mb-2">
         <p className="text-[13px]" style={{ color: '#64748B' }}>{label}</p>
         {icon && <span className={`text-[20px] leading-none ${iconCls[color] || 'text-[#94A3B8]'}`}>{icon}</span>}
       </div>
-      <p className="text-[28px] font-bold leading-tight" style={{ color: '#0F172A' }}>{value ?? '—'}</p>
+      <p className={`text-[28px] font-bold leading-tight transition-colors duration-300 ${flashing ? 'text-[#16A34A]' : ''}`}
+        style={flashing ? {} : { color: '#0F172A' }}>{value ?? '—'}</p>
       {onClick && <p className="text-xs mt-2" style={{ color: '#94A3B8' }}>→ 바로가기</p>}
     </div>
   )
@@ -83,9 +84,24 @@ export default function AdminDashboard() {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [tick, setTick] = useState(0)
   const [issueStats, setIssueStats] = useState(null)
+  const [flashCards, setFlashCards] = useState({})
+  const prevStats = useRef(null)
 
   const fetchStats = () => {
     api.get('/stats/admin').then((r) => {
+      const prev = prevStats.current
+      if (prev) {
+        const newFlash = {}
+        if ((r.data.total_orders ?? 0) > (prev.total_orders ?? 0)) newFlash.total_orders = true
+        if ((r.data.today_orders ?? 0) > (prev.today_orders ?? 0)) newFlash.today_orders = true
+        if ((r.data.shipped_today ?? 0) > (prev.shipped_today ?? 0)) newFlash.shipped_today = true
+        if ((r.data.delivered_today ?? 0) > (prev.delivered_today ?? 0)) newFlash.delivered_today = true
+        if (Object.keys(newFlash).length > 0) {
+          setFlashCards(newFlash)
+          setTimeout(() => setFlashCards({}), 700)
+        }
+      }
+      prevStats.current = r.data
       setStats(r.data)
       setLastUpdated(Date.now())
     }).catch(console.error)
@@ -98,7 +114,7 @@ export default function AdminDashboard() {
   }, [tick])
 
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 10000)
+    const id = setInterval(() => setTick(t => t + 1), 8000)
     return () => clearInterval(id)
   }, [])
 
@@ -130,8 +146,8 @@ export default function AdminDashboard() {
 
           {/* Stats cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-            <StatCard label="오늘 주문"     value={stats?.today_orders}       color="blue"   icon="📋" onClick={() => navigate('/admin/orders?filter=today')} />
-            <StatCard label="미처리 주문"   value={stats?.pending_orders}     color="yellow" icon="⏳" onClick={() => navigate('/admin/orders?filter=pending')} />
+            <StatCard label="오늘 주문"     value={stats?.today_orders}       color="blue"   icon="📋" onClick={() => navigate('/admin/orders?filter=today')} flashing={flashCards.today_orders} />
+            <StatCard label="미처리 주문"   value={stats?.pending_orders}     color="yellow" icon="⏳" onClick={() => navigate('/admin/orders?filter=pending')} flashing={flashCards.total_orders} />
             <StatCard label="재고 부족"     value={stats?.low_stock_count}    color="red"    icon="⚠️" onClick={() => navigate('/admin/inventory?filter=low_stock')} />
             <StatCard label="유통기한 임박" value={stats?.expiry_alert_count} color="orange" icon="🕐" onClick={() => navigate('/admin/inventory?filter=expiry_alert')} />
             <StatCard label="수요 알림"     value={stats?.demand_alert_count} color="red"    icon="📈" />

@@ -1,10 +1,12 @@
 import asyncio
+import json
 import random
 import time
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import joinedload
 from backend.database import engine, SessionLocal
 from backend.models.user import Base, User, UserRole
 from backend.models.product import Product, StorageType   # noqa: F401
@@ -32,6 +34,7 @@ from backend.core.security import hash_password
 from backend.routers import auth, inventory, order, delivery, settlement, stats
 from backend.routers import return_request, channel_sync, promotion, notification, seller_management, chat
 from backend.routers import forecast, reorder, vrp, batch_picking, picking_route, slotting
+from backend.routers.batch_picking import create_batch_groups as _bp_create_groups, _build_order_data as _bp_build_data
 from backend.routers import inbound_schedule, issue, kpi, inventory_adjust
 from backend.routers.ai_assistant import router as ai_router
 from backend.routers.vrp import address_to_coords as _coord_from_address
@@ -828,15 +831,29 @@ def seed_order_issues(db):
 # ── Background: order simulator ────────────────────────────────────────────────
 
 async def order_simulator():
-    """Every 30 s: create new RECEIVED orders. Staggered progression via cycle counter.
-    Cycle rates: RECEIVED→PICKING every 2nd, PICKING→PACKED every 3rd,
-    PACKED→SHIPPED every 4th, SHIPPED→DELIVERED every 6th.
-    """
-    _SIM_NAMES  = ['김민지', '이수진', '박지현', '최유리', '정하나', '한예슬', '오지민', '김예린']
-    _SIM_ADDRS  = ['서울 강남구', '부산 해운대구', '경기 성남시', '인천 연수구', '대전 유성구', '대구 수성구']
-    _SIM_CHANS  = [OrderChannel.SMARTSTORE, OrderChannel.OLIVEYOUNG, OrderChannel.ZIGZAG, OrderChannel.CAFE24]
+    """Every 15s — high-frequency demo simulator. All 6 sellers, all status transitions every cycle.
 
-    await asyncio.sleep(10)   # let startup finish first
+    Per cycle (15s):
+    1. Create 2-3 RECEIVED orders (priority for underrepresented sellers, weighted channels)
+    2. 3-4 RECEIVED → PICKING
+    3. 2-3 PICKING  → PACKED
+    4. 2-3 PACKED   → SHIPPED  (create delivery IN_TRANSIT)
+    5. Time-based delivery progression:
+         IN_TRANSIT (30s+)       → OUT_FOR_DELIVERY
+         OUT_FOR_DELIVERY (30s+) → DELIVERED (+ order status DELIVERED)
+    6. 5% chance: cancel a random RECEIVED order
+    7. Every 5 cycles (~75s): force-create for any seller with no recent orders
+    8. Auto-batch when RECEIVED >= 10
+    """
+    _SIM_NAMES  = ['김민지', '이수진', '박지현', '최유리', '정하나', '한예슬', '오지민', '김예린',
+                   '이민준', '박서준', '최지우', '장동건', '손예진', '신민아', '이도현', '김태현']
+    _SIM_ADDRS  = ['서울 강남구 테헤란로 123', '부산 해운대구 우동로 55', '경기 성남시 분당구 판교로 8',
+                   '인천 연수구 송도대로 100', '대전 유성구 대학로 99', '대구 수성구 달구벌대로 200',
+                   '서울 마포구 홍대입구로 77', '경기 수원시 영통구 광교로 22', '광주 서구 상무중앙로 30']
+    _SIM_CHANS  = [OrderChannel.SMARTSTORE, OrderChannel.CAFE24, OrderChannel.OLIVEYOUNG, OrderChannel.ZIGZAG]
+    _SIM_CHAN_W = [35, 25, 25, 15]
+
+    await asyncio.sleep(10)
     cycle = 0
     while True:
         cycle += 1
@@ -844,101 +861,208 @@ async def order_simulator():
         try:
             sellers = db.query(User).filter(User.role == UserRole.SELLER).all()
             if not sellers:
-                await asyncio.sleep(30)
+                await asyncio.sleep(15)
                 continue
 
-            # 1. Create 2-3 new RECEIVED orders each cycle
+            sellers_by_id = {s.id: s for s in sellers}
+
+            # ── 1. Create 2-3 new RECEIVED orders (balanced across all sellers) ──────
+            recent_cutoff = datetime.utcnow() - timedelta(minutes=10)
+            from collections import Counter
+            recent_counts = Counter(
+                row.seller_id for row in
+                db.query(Order.seller_id).filter(Order.created_at >= recent_cutoff).all()
+            )
+            # Sort sellers: least-recently-ordered first
+            sellers_sorted = sorted(sellers, key=lambda s: recent_counts.get(s.id, 0))
+
             n_new = random.randint(2, 3)
-            for _ in range(n_new):
-                seller = random.choice(sellers)
+            for i in range(n_new):
+                seller = sellers_sorted[i % len(sellers_sorted)]
                 prods  = db.query(Product).filter(Product.seller_id == seller.id).all()
+                if not prods:
+                    continue
+                prod       = random.choice(prods)
+                unit_price = _PRODUCT_PRICES.get(prod.sku, 25000)
+                qty        = random.randint(1, 2)
+                channel    = _pick(_SIM_CHANS, _SIM_CHAN_W)
                 order_number = (
                     f"FF-{datetime.now().strftime('%Y%m%d')}-{int(time.time() * 1000) % 100000:05d}"
                 )
-                amount = random.randint(15, 85) * 1000
                 new_o = Order(
                     order_number=order_number,
-                    channel=random.choice(_SIM_CHANS),
+                    channel=channel,
                     seller_id=seller.id,
                     status=OrderStatus.RECEIVED,
                     receiver_name=random.choice(_SIM_NAMES),
                     receiver_phone=f"010-{random.randint(1000,9999)}-{random.randint(1000,9999)}",
                     receiver_address=random.choice(_SIM_ADDRS),
-                    total_amount=Decimal(str(amount)),
+                    total_amount=Decimal(str(unit_price * qty)),
                 )
-                db.add(new_o); db.flush()
-                if prods:
-                    prod = random.choice(prods)
-                    unit_price = _PRODUCT_PRICES.get(prod.sku, amount)
-                    db.add(OrderItem(order_id=new_o.id, product_id=prod.id,
-                                     quantity=1, unit_price=Decimal(str(unit_price))))
-                print(f"[Simulator] 📦 NEW {order_number} (RECEIVED)")
+                db.add(new_o)
+                db.flush()
+                db.add(OrderItem(order_id=new_o.id, product_id=prod.id,
+                                 quantity=qty, unit_price=Decimal(str(unit_price))))
+                print(f"[Simulator] 📦 NEW {order_number} | {seller.full_name} | {channel.value}")
 
-            # 2. RECEIVED → PICKING every 2nd cycle
-            if cycle % 2 == 0:
-                received_orders = (
-                    db.query(Order).filter(Order.status == OrderStatus.RECEIVED)
-                    .order_by(Order.created_at.asc()).limit(2).all()
-                )
-                for o in received_orders:
-                    o.status = OrderStatus.PICKING
-                    db.add(OrderHistory(order_id=o.id, changed_by_name="자동 시뮬레이터",
-                                        field_changed="status", old_value="주문 접수", new_value="출고 준비중"))
-                    print(f"[Simulator] 🔄 {o.order_number}: RECEIVED → PICKING")
+            # ── 2. RECEIVED → PICKING (3-4 orders) ───────────────────────────────────
+            received_orders = (
+                db.query(Order).filter(Order.status == OrderStatus.RECEIVED)
+                .order_by(Order.created_at.asc()).limit(random.randint(3, 4)).all()
+            )
+            for o in received_orders:
+                sname = sellers_by_id.get(o.seller_id)
+                sname = sname.full_name if sname else "?"
+                o.status = OrderStatus.PICKING
+                db.add(OrderHistory(order_id=o.id, changed_by_name="자동 시뮬레이터",
+                                    field_changed="status", old_value="주문 접수", new_value="출고 준비중"))
+                print(f"[Simulator] 🔄 {o.order_number} ({sname}): 주문접수 → 출고준비중")
 
-            # 3. PICKING → PACKED every 3rd cycle
-            if cycle % 3 == 0:
-                picking_orders = (
-                    db.query(Order).filter(Order.status == OrderStatus.PICKING)
-                    .order_by(Order.created_at.asc()).limit(2).all()
-                )
-                for o in picking_orders:
-                    o.status = OrderStatus.PACKED
-                    db.add(OrderHistory(order_id=o.id, changed_by_name="자동 시뮬레이터",
-                                        field_changed="status", old_value="출고 준비중", new_value="패킹 완료"))
-                    print(f"[Simulator] 📦 {o.order_number}: PICKING → PACKED")
-
-            # 4. PACKED → SHIPPED every 4th cycle
-            if cycle % 4 == 0:
-                packed_orders = (
-                    db.query(Order).filter(Order.status == OrderStatus.PACKED)
-                    .order_by(Order.created_at.asc()).limit(2).all()
-                )
-                for o in packed_orders:
-                    existing = db.query(Delivery).filter(Delivery.order_id == o.id).first()
-                    if not existing:
-                        o.status = OrderStatus.SHIPPED
-                        courier = _pick(_COURIERS, _COURIER_W)
-                        db.add(Delivery(
-                            order_id=o.id,
-                            tracking_number=_tracking_number(courier),
-                            carrier=courier,
-                            status=DeliveryStatus.IN_TRANSIT,
-                            estimated_delivery=date.today() + timedelta(days=1),
-                        ))
-                        db.add(OrderHistory(order_id=o.id, changed_by_name="자동 시뮬레이터",
-                                            field_changed="status", old_value="패킹 완료", new_value="출고 완료"))
-                        print(f"[Simulator] 🚚 {o.order_number}: PACKED → SHIPPED ({courier.value})")
-
-            # 5. SHIPPED → DELIVERED every 6th cycle
-            if cycle % 6 == 0:
-                shipped_orders = (
+            # Auto-generate batches if RECEIVED >= 10
+            received_count = db.query(Order).filter(Order.status == OrderStatus.RECEIVED).count()
+            if received_count >= 10:
+                db.query(BatchPicking).filter(BatchPicking.status == "CREATED").delete(synchronize_session=False)
+                db.flush()
+                received_for_batch = (
                     db.query(Order)
-                    .join(Delivery, Delivery.order_id == Order.id)
-                    .filter(Order.status == OrderStatus.SHIPPED,
-                            Delivery.status == DeliveryStatus.IN_TRANSIT)
-                    .order_by(Order.created_at.asc())
-                    .limit(2).all()
+                    .options(joinedload(Order.items).joinedload(OrderItem.product))
+                    .filter(Order.status == OrderStatus.RECEIVED)
+                    .all()
                 )
-                for o in shipped_orders:
+                order_data = _bp_build_data(received_for_batch)
+                groups     = _bp_create_groups(order_data)
+                today_str  = datetime.now().strftime("%Y%m%d")
+                for i, group in enumerate(groups, start=1):
+                    total_items = sum(sum(it["qty"] for it in o_["items"]) for o_ in group)
+                    order_ids   = [o_["order_id"] for o_ in group]
+                    db.add(BatchPicking(
+                        batch_number=f"BP-{today_str}-{i:03d}",
+                        status="CREATED",
+                        order_ids=json.dumps(order_ids),
+                        total_items=total_items,
+                    ))
+                print(f"[Simulator] 🗂️ Auto-generated {len(groups)} batches from {received_count} orders")
+
+            # ── 3. PICKING → PACKED (2-3 orders) ─────────────────────────────────────
+            picking_orders = (
+                db.query(Order).filter(Order.status == OrderStatus.PICKING)
+                .order_by(Order.created_at.asc()).limit(random.randint(2, 3)).all()
+            )
+            for o in picking_orders:
+                sname = sellers_by_id.get(o.seller_id)
+                sname = sname.full_name if sname else "?"
+                o.status = OrderStatus.PACKED
+                db.add(OrderHistory(order_id=o.id, changed_by_name="자동 시뮬레이터",
+                                    field_changed="status", old_value="출고 준비중", new_value="패킹 완료"))
+                print(f"[Simulator] 📦 {o.order_number} ({sname}): 출고준비중 → 패킹완료")
+
+            # ── 4. PACKED → SHIPPED (2-3 orders) ─────────────────────────────────────
+            packed_orders = (
+                db.query(Order).filter(Order.status == OrderStatus.PACKED)
+                .order_by(Order.created_at.asc()).limit(random.randint(2, 3)).all()
+            )
+            for o in packed_orders:
+                existing = db.query(Delivery).filter(Delivery.order_id == o.id).first()
+                if not existing:
+                    sname = sellers_by_id.get(o.seller_id)
+                    sname = sname.full_name if sname else "?"
+                    o.status = OrderStatus.SHIPPED
+                    courier = _pick(_COURIERS, _COURIER_W)
+                    db.add(Delivery(
+                        order_id=o.id,
+                        tracking_number=_tracking_number(courier),
+                        carrier=courier,
+                        status=DeliveryStatus.IN_TRANSIT,
+                        estimated_delivery=date.today() + timedelta(days=1),
+                    ))
+                    db.add(OrderHistory(order_id=o.id, changed_by_name="자동 시뮬레이터",
+                                        field_changed="status", old_value="패킹 완료", new_value="출고 완료"))
+                    print(f"[Simulator] 🚚 {o.order_number} ({sname}): 패킹완료 → 출고완료 [{courier.value}]")
+
+            # ── 5. Time-based delivery status progression ─────────────────────────────
+            now_utc = datetime.utcnow()
+            two_cycles_ago  = now_utc - timedelta(seconds=30)
+            four_cycles_ago = now_utc - timedelta(seconds=60)
+
+            # IN_TRANSIT (30s+) → OUT_FOR_DELIVERY
+            in_transit = (
+                db.query(Delivery)
+                .filter(Delivery.status == DeliveryStatus.IN_TRANSIT,
+                        Delivery.created_at <= two_cycles_ago)
+                .limit(3).all()
+            )
+            for d in in_transit:
+                d.status = DeliveryStatus.OUT_FOR_DELIVERY
+
+            # OUT_FOR_DELIVERY (30s+) → DELIVERED (+ sync order status)
+            out_for_delivery = (
+                db.query(Delivery)
+                .filter(Delivery.status == DeliveryStatus.OUT_FOR_DELIVERY,
+                        Delivery.created_at <= four_cycles_ago)
+                .limit(3).all()
+            )
+            for d in out_for_delivery:
+                d.status = DeliveryStatus.DELIVERED
+                d.actual_delivery = date.today()
+                o = db.query(Order).filter(Order.id == d.order_id).first()
+                if o and o.status == OrderStatus.SHIPPED:
+                    sname = sellers_by_id.get(o.seller_id)
+                    sname = sname.full_name if sname else "?"
                     o.status = OrderStatus.DELIVERED
-                    d = db.query(Delivery).filter(Delivery.order_id == o.id).first()
-                    if d:
-                        d.status = DeliveryStatus.DELIVERED
-                        d.actual_delivery = date.today()
                     db.add(OrderHistory(order_id=o.id, changed_by_name="자동 시뮬레이터",
                                         field_changed="status", old_value="출고 완료", new_value="배송 완료"))
-                    print(f"[Simulator] ✅ {o.order_number}: SHIPPED → DELIVERED")
+                    print(f"[Simulator] ✅ {o.order_number} ({sname}): 배송완료")
+
+            # ── 6. 5% chance: cancel a random RECEIVED order ──────────────────────────
+            if random.random() < 0.05:
+                cancel_candidate = (
+                    db.query(Order).filter(Order.status == OrderStatus.RECEIVED)
+                    .order_by(Order.created_at.asc()).first()
+                )
+                if cancel_candidate:
+                    sname = sellers_by_id.get(cancel_candidate.seller_id)
+                    sname = sname.full_name if sname else "?"
+                    cancel_candidate.status = OrderStatus.CANCELLED
+                    db.add(OrderHistory(
+                        order_id=cancel_candidate.id,
+                        changed_by_name="자동 시뮬레이터",
+                        field_changed="status",
+                        old_value="주문 접수",
+                        new_value="취소",
+                    ))
+                    print(f"[Simulator] ❌ {cancel_candidate.order_number} ({sname}): 취소")
+
+            # ── 7. Every 5 cycles (~75s): ensure all sellers have recent orders ────────
+            if cycle % 5 == 0:
+                cutoff = datetime.utcnow() - timedelta(minutes=10)
+                for seller in sellers:
+                    recent = db.query(Order).filter(
+                        Order.seller_id == seller.id, Order.created_at >= cutoff
+                    ).count()
+                    if recent == 0:
+                        prods = db.query(Product).filter(Product.seller_id == seller.id).all()
+                        if not prods:
+                            continue
+                        prod       = random.choice(prods)
+                        unit_price = _PRODUCT_PRICES.get(prod.sku, 25000)
+                        order_number = (
+                            f"FF-{datetime.now().strftime('%Y%m%d')}-{int(time.time() * 1000) % 100000:05d}"
+                        )
+                        force_o = Order(
+                            order_number=order_number,
+                            channel=_pick(_SIM_CHANS, _SIM_CHAN_W),
+                            seller_id=seller.id,
+                            status=OrderStatus.RECEIVED,
+                            receiver_name=random.choice(_SIM_NAMES),
+                            receiver_phone=f"010-{random.randint(1000,9999)}-{random.randint(1000,9999)}",
+                            receiver_address=random.choice(_SIM_ADDRS),
+                            total_amount=Decimal(str(unit_price)),
+                        )
+                        db.add(force_o)
+                        db.flush()
+                        db.add(OrderItem(order_id=force_o.id, product_id=prod.id,
+                                         quantity=1, unit_price=Decimal(str(unit_price))))
+                        print(f"[Simulator] ⚠️ Force creating order for {seller.full_name} (no recent orders)")
 
             db.commit()
         except Exception as e:
@@ -949,7 +1073,7 @@ async def order_simulator():
                 pass
         finally:
             db.close()
-        await asyncio.sleep(30)
+        await asyncio.sleep(15)
 
 
 # ── Startup ────────────────────────────────────────────────────────────────────

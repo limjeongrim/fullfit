@@ -4,6 +4,18 @@ import useAuthStore from '../../store/authStore'
 import api from '../../api/axiosInstance'
 import SidebarLayout from '../../components/Layout/SidebarLayout'
 
+function LiveUpdateIndicator() {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+      </span>
+      <span className="text-xs font-medium" style={{ color: '#64748B' }}>실시간 업데이트 중</span>
+    </span>
+  )
+}
+
 export default function WorkerDashboard() {
   const { user } = useAuthStore()
   const navigate = useNavigate()
@@ -11,7 +23,7 @@ export default function WorkerDashboard() {
 
   const todayStr = new Date().toISOString().slice(0, 10)
 
-  useEffect(() => {
+  const fetchCounts = () => {
     api.get('/orders/?limit=200').then((res) => {
       const items = res.data.items
       setCounts({
@@ -21,6 +33,12 @@ export default function WorkerDashboard() {
         shippedToday: items.filter((o) => o.status === 'SHIPPED' && o.created_at.slice(0, 10) === todayStr).length,
       })
     }).catch(() => {})
+  }
+
+  useEffect(() => {
+    fetchCounts()
+    const id = setInterval(fetchCounts, 10000)
+    return () => clearInterval(id)
   }, [])
 
   return (
@@ -31,7 +49,10 @@ export default function WorkerDashboard() {
           <div className="mb-6">
             <h2 className="text-2xl font-bold" style={{ color: '#0F172A' }}>안녕하세요,</h2>
             <h2 className="text-2xl font-bold" style={{ color: '#0F172A' }}>{user?.full_name}님!</h2>
-            <p className="mt-2 text-base" style={{ color: '#64748B' }}>오늘도 수고해주세요!</p>
+            <div className="flex items-center justify-between mt-2">
+              <p className="text-base" style={{ color: '#64748B' }}>오늘도 수고해주세요!</p>
+              <LiveUpdateIndicator />
+            </div>
           </div>
 
           {/* Flow guide */}

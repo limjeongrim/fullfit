@@ -109,7 +109,7 @@ export default function SellerOrderPage() {
   useEffect(() => { fetchOrders() }, [filterStatus, filterChannel, search, tick])
 
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 10000)
+    const id = setInterval(() => setTick(t => t + 1), 15000)
     return () => clearInterval(id)
   }, [])
 

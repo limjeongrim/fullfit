@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
 import DeliveryMap from '../../components/DeliveryMap'
@@ -112,6 +112,8 @@ export default function AdminDeliveryPage() {
   const [submitting, setSubmitting] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(null)
   const [tick, setTick] = useState(0)
+  const [flashDeliveryIds, setFlashDeliveryIds] = useState(new Set())
+  const prevDeliveryIds = useRef(new Set())
 
   const showToast = (msg, type = 'success') => addToast(type, msg)
 
@@ -119,7 +121,21 @@ export default function AdminDeliveryPage() {
     const params = new URLSearchParams()
     if (filterSeller) params.set('seller_id', filterSeller)
     const res = await api.get(`/deliveries/?${params}`)
-    setDeliveries(res.data)
+    const items = res.data
+    // Flash newly completed (DELIVERED) deliveries
+    const nowDelivered = new Set(items.filter(d => d.status === 'DELIVERED').map(d => d.id))
+    const prevDelivered = new Set([...prevDeliveryIds.current].filter(id => {
+      // We don't track status in ref, so just flash new rows
+      return false
+    }))
+    const allIds = new Set(items.map(d => d.id))
+    const freshIds = new Set([...allIds].filter(id => !prevDeliveryIds.current.has(id)))
+    if (freshIds.size > 0 && prevDeliveryIds.current.size > 0) {
+      setFlashDeliveryIds(freshIds)
+      setTimeout(() => setFlashDeliveryIds(new Set()), 800)
+    }
+    prevDeliveryIds.current = allIds
+    setDeliveries(items)
     setLastUpdated(Date.now())
   }
 
@@ -142,7 +158,7 @@ export default function AdminDeliveryPage() {
   useEffect(() => { if (deliveries.length >= 0) fetchEligibleOrders() }, [deliveries])
 
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 10000)
+    const id = setInterval(() => setTick(t => t + 1), 8000)
     return () => clearInterval(id)
   }, [])
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import useToastStore from '../../store/toastStore'
 import api from '../../api/axiosInstance'
@@ -104,6 +104,8 @@ export default function AdminOrderPage() {
   const [tick, setTick] = useState(0)
   const [notifs, setNotifs] = useState([])
   const [adminStats, setAdminStats] = useState(null)
+  const [newOrderIds, setNewOrderIds] = useState(new Set())
+  const prevOrderIds = useRef(new Set())
 
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [orderHistory, setOrderHistory] = useState([])
@@ -127,7 +129,16 @@ export default function AdminOrderPage() {
     if (search) params.set('search', search)
     params.set('limit', '100')
     const res = await api.get(`/orders/?${params}`)
-    setOrders(res.data.items)
+    const items = res.data.items
+    // Detect new order IDs for row flash
+    const incoming = new Set(items.map(o => o.id))
+    const fresh = new Set([...incoming].filter(id => !prevOrderIds.current.has(id)))
+    if (fresh.size > 0 && prevOrderIds.current.size > 0) {
+      setNewOrderIds(fresh)
+      setTimeout(() => setNewOrderIds(new Set()), 800)
+    }
+    prevOrderIds.current = incoming
+    setOrders(items)
     setTotal(res.data.total)
     setLastUpdated(Date.now())
   }
@@ -165,7 +176,7 @@ export default function AdminOrderPage() {
   useEffect(() => { fetchOrders() }, [filterStatus, filterChannel, filterSeller, search, tick])
 
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 10000)
+    const id = setInterval(() => setTick(t => t + 1), 8000)
     return () => clearInterval(id)
   }, [])
 
@@ -319,7 +330,9 @@ export default function AdminOrderPage() {
                       displayedOrders.map((o) => (
                         <tr key={o.id}
                           onClick={() => openOrderDetail(o)}
-                          className="border-b border-[#F1F5F9] hover:bg-[#F0F4FF] transition-colors cursor-pointer">
+                          className={`border-b border-[#F1F5F9] transition-colors cursor-pointer ${
+                            newOrderIds.has(o.id) ? 'bg-[#F0FDF4]' : 'hover:bg-[#F0F4FF]'
+                          }`}>
                           <td className="px-4 py-3 font-mono text-xs whitespace-nowrap" style={{ color: '#64748B' }}>{o.order_number}</td>
                           <td className="px-4 py-3"><ChannelBadge channel={o.channel} /></td>
                           <td className="px-4 py-3 font-medium" style={{ color: '#0F172A' }}>{o.receiver_name}</td>

@@ -22,12 +22,21 @@ async def get_context(
     packed = db.query(Order).filter(Order.status == OrderStatus.PACKED).count()
     shipped = db.query(Order).filter(Order.status == OrderStatus.SHIPPED).count()
 
-    low_stock = (
-        db.query(Product)
+    low_stock_items = (
+        db.query(Product, Inventory)
         .join(Inventory, Inventory.product_id == Product.id)
         .filter(Inventory.quantity < 20)
         .all()
     )
+
+    low_stock_list = [
+        {
+            "상품명": product.name,
+            "SKU": product.sku,
+            "재고": inventory.quantity,
+        }
+        for product, inventory in low_stock_items[:5]
+    ]
 
     open_issues = db.query(OrderIssue).filter(OrderIssue.status == "OPEN").count()
 
@@ -39,14 +48,7 @@ async def get_context(
             "패킹완료": packed,
             "출고완료": shipped,
         },
-        "재고부족상품": [
-            {
-                "상품명": p.name,
-                "SKU": p.sku,
-                "재고": p.inventories[0].quantity if p.inventories else 0,
-            }
-            for p in low_stock[:5]
-        ],
+        "재고부족상품": low_stock_list,
         "미해결이슈": open_issues,
     }
 

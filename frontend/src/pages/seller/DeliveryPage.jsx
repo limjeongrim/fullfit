@@ -28,6 +28,36 @@ function CarrierBadge({ carrier }) {
   return <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${m.cls}`}>{m.label}</span>
 }
 
+function LiveIndicator() {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+      </span>
+      <span className="text-xs font-medium" style={{ color: '#64748B' }}>실시간</span>
+    </span>
+  )
+}
+
+function LastUpdated({ time }) {
+  const [display, setDisplay] = useState('—')
+  useEffect(() => {
+    const update = () => {
+      if (!time) { setDisplay('—'); return }
+      const diff = Math.floor((Date.now() - time) / 1000)
+      if (diff < 10) setDisplay('방금 전')
+      else if (diff < 60) setDisplay(`${diff}초 전`)
+      else if (diff < 3600) setDisplay(`${Math.floor(diff / 60)}분 전`)
+      else setDisplay(new Date(time).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }))
+    }
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [time])
+  return <span className="text-xs" style={{ color: '#94A3B8' }}>마지막 업데이트: {display}</span>
+}
+
 function isDelayed(d) {
   if (!d.estimated_delivery) return false
   return (
@@ -110,9 +140,20 @@ export default function SellerDeliveryPage() {
   const [search, setSearch] = useState('')
   const [trackingModal, setTrackingModal] = useState(null)
   const [showMap, setShowMap] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState(null)
+
+  const fetchDeliveries = async () => {
+    try {
+      const res = await api.get('/deliveries/seller')
+      setDeliveries(res.data)
+      setLastUpdated(Date.now())
+    } catch (e) { console.error(e) }
+  }
 
   useEffect(() => {
-    api.get('/deliveries/seller').then((res) => setDeliveries(res.data))
+    fetchDeliveries()
+    const id = setInterval(fetchDeliveries, 15000)
+    return () => clearInterval(id)
   }, [])
 
   const filtered = deliveries.filter((d) => {
@@ -144,6 +185,12 @@ export default function SellerDeliveryPage() {
                 <p className="text-3xl font-bold mt-1" style={{ color: '#0F172A' }}>{s.value}</p>
               </div>
             ))}
+          </div>
+
+          {/* Live bar */}
+          <div className="flex items-center justify-between mb-4">
+            <LiveIndicator />
+            <LastUpdated time={lastUpdated} />
           </div>
 
           {/* Filters */}
