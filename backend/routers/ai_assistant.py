@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+import os
 import httpx
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
@@ -18,6 +19,45 @@ from backend.models.settlement import Settlement, SettlementStatus
 from backend.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/ai", tags=["ai"])
+
+
+async def search_naver(query: str) -> str:
+    client_id = os.getenv("NAVER_CLIENT_ID")
+    client_secret = os.getenv("NAVER_CLIENT_SECRET")
+
+    if not client_id or not client_secret:
+        return "검색 API가 설정되지 않았습니다."
+
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            "https://openapi.naver.com/v1/search/webkr.json",
+            headers={
+                "X-Naver-Client-Id": client_id,
+                "X-Naver-Client-Secret": client_secret,
+            },
+            params={
+                "query": query,
+                "display": 3,
+                "sort": "date",
+            },
+        )
+
+        if response.status_code != 200:
+            return "검색 결과를 가져올 수 없습니다."
+
+        data = response.json()
+        items = data.get("items", [])
+
+        if not items:
+            return "검색 결과가 없습니다."
+
+        results = []
+        for item in items[:3]:
+            title = item.get("title", "").replace("<b>", "").replace("</b>", "")
+            description = item.get("description", "").replace("<b>", "").replace("</b>", "")
+            results.append(f"- {title}: {description}")
+
+        return "\n".join(results)
 
 
 @router.get("/context")
@@ -219,38 +259,35 @@ async def get_context(
 async def chat(
     request: dict,
     current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     user_message = request.get("message", "")
     context = request.get("context", {})
 
-    system_prompt = f"""[시스템 지시사항 - 절대 규칙]
-1. 반드시 한국어로만 답변하세요. 영어, 일본어, 한자 사용 절대 금지.
-2. 아래 데이터에 있는 정보는 정확하게 답변하세요.
-3. 3-5문장으로 간결하게 답변하세요.
-4. 데이터에 없는 내용은 "해당 데이터가 없습니다"라고 답변하세요.
-5. 같은 내용을 절대 반복하지 마세요.
-6. 데이터에 없으면 "없습니다"로 한 번만 답변하세요.
-7. 200자 이내로 답변하세요.
+    # Keywords that need web search
+    search_keywords = ["날씨", "뉴스", "최근", "오늘", "현재", "어떻게 돼", "어디"]
+    needs_search = any(kw in user_message for kw in search_keywords)
 
-[FullFit 화장품 풀필먼트 센터 운영 데이터]
+    search_result = ""
+    if needs_search:
+        search_result = await search_naver(user_message)
+
+    system_prompt = f"""당신은 FullFit 화장품 풀필먼트 센터의 AI 운영 어시스턴트입니다.
+반드시 한국어로만 답변하세요. 영어, 한자, 일본어 사용 절대 금지.
+같은 내용을 반복하지 마세요. 200자 이내로 간결하게 답변하세요.
+
+[운영 데이터]
 {context}
 
-[데이터 활용 규칙]
-- 주소오류 질문 → 이슈목록에서 유형이 ADDRESS_ERROR인 항목 확인
-- 재고부족 질문 → 재고부족상품 또는 이슈목록에서 STOCK_SHORTAGE 확인
-- 프로모션 질문 → 프로모션일정 확인
-- 입고 질문 → 입고예정 확인
-- 셀러 질문 → 셀러목록 확인
-- 주문 질문 → 주문현황 확인
-- 이슈 질문 → 이슈목록 전체 확인
+{f"[웹 검색 결과]{chr(10)}{search_result}" if search_result else ""}
 
-답변 시작 전 반드시 관련 데이터를 확인하고 정확한 정보를 제공하세요."""
+답변 규칙:
+- 운영 데이터 질문 → 데이터 기반으로 정확하게
+- 웹 검색 결과 있으면 → 검색 결과 요약해서 답변
+- 데이터에 없으면 → "해당 정보가 없습니다" 한 번만
+- 절대 반복 금지"""
 
-    full_prompt = f"""{system_prompt}
-
-사용자 질문: {user_message}
-
-한국어로만 답변 (영어/일본어/한자 절대 금지):"""
+    full_prompt = f"{system_prompt}\n\n질문: {user_message}\n\n답변:"
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
@@ -265,7 +302,7 @@ async def chat(
                         "top_p": 0.9,
                         "repeat_penalty": 1.5,
                         "num_predict": 200,
-                        "stop": ["\n\n\n", "그러나 이슈", "입고예정 목록을 다시"],
+                        "stop": ["\n\n\n", "질문:", "답변:"],
                     },
                 },
             )
