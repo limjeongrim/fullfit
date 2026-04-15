@@ -56,7 +56,7 @@ export default function AIAssistant() {
     } catch {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Ollama 서버에 연결할 수 없습니다. `ollama run llama3.2` 명령어로 서버를 시작해주세요.',
+        content: 'Ollama 서버에 연결할 수 없습니다. `ollama run llama3.1:8b` 명령어로 서버를 시작해주세요.',
       }])
     } finally {
       setLoading(false)
@@ -99,7 +99,7 @@ export default function AIAssistant() {
             style={{ background: 'linear-gradient(135deg, #7C3AED, #2563EB)' }}>
             <div>
               <h3 className="font-bold text-white text-[15px] leading-tight">FullFit AI 어시스턴트 🤖</h3>
-              <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>Powered by Ollama llama3.2</p>
+              <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>Powered by Ollama llama3.1:8b</p>
             </div>
             <button onClick={() => setOpen(false)}
               className="text-white/70 hover:text-white text-xl leading-none ml-3 mt-0.5">×</button>
