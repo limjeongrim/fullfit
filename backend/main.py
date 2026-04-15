@@ -2,6 +2,8 @@ import asyncio
 import json
 import random
 import time
+from dotenv import load_dotenv
+load_dotenv()
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from fastapi import FastAPI
