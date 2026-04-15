@@ -681,9 +681,6 @@ def seed_vrp_deliveries(db):
 
 def seed_inbound_schedules(db):
     """Seed inbound requests with REQUESTED status scheduled for tomorrow."""
-    if db.query(InboundSchedule).count() > 0:
-        return
-
     tomorrow = date.today() + timedelta(days=1)
     now = datetime.utcnow()
 
@@ -705,6 +702,15 @@ def seed_inbound_schedules(db):
         seller_u = users.get(email)
         prod     = products.get(sku)
         if not seller_u or not prod:
+            continue
+
+        # Only add if not already exists (check by seller_id + product_id)
+        existing = db.query(Inbound).filter(
+            Inbound.product_id == prod.id,
+            Inbound.created_by == seller_u.id,
+            Inbound.inbound_date == tomorrow,
+        ).first()
+        if existing:
             continue
 
         inb = Inbound(
