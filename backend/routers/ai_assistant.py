@@ -22,42 +22,47 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 
 async def search_naver(query: str) -> str:
+    import re
+
     client_id = os.getenv("NAVER_CLIENT_ID")
     client_secret = os.getenv("NAVER_CLIENT_SECRET")
 
     if not client_id or not client_secret:
-        return "검색 API가 설정되지 않았습니다."
+        return ""
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            "https://openapi.naver.com/v1/search/webkr.json",
-            headers={
-                "X-Naver-Client-Id": client_id,
-                "X-Naver-Client-Secret": client_secret,
-            },
-            params={
-                "query": query,
-                "display": 3,
-                "sort": "date",
-            },
-        )
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://openapi.naver.com/v1/search/webkr.json",
+                headers={
+                    "X-Naver-Client-Id": client_id,
+                    "X-Naver-Client-Secret": client_secret,
+                },
+                params={
+                    "query": query,
+                    "display": 2,
+                    "sort": "date",
+                },
+            )
 
-        if response.status_code != 200:
-            return "검색 결과를 가져올 수 없습니다."
+            if response.status_code != 200:
+                return ""
 
-        data = response.json()
-        items = data.get("items", [])
+            data = response.json()
+            items = data.get("items", [])
 
-        if not items:
-            return "검색 결과가 없습니다."
+            if not items:
+                return ""
 
-        results = []
-        for item in items[:3]:
-            title = item.get("title", "").replace("<b>", "").replace("</b>", "")
-            description = item.get("description", "").replace("<b>", "").replace("</b>", "")
-            results.append(f"- {title}: {description}")
+            results = []
+            for item in items[:2]:
+                desc = re.sub(r'<[^>]+>', '', item.get("description", ""))
+                if desc:
+                    results.append(desc)
 
-        return "\n".join(results)
+            return " ".join(results)
+    except Exception:
+        return ""
 
 
 @router.get("/context")
@@ -265,27 +270,37 @@ async def chat(
     context = request.get("context", {})
 
     # Keywords that need web search
-    search_keywords = ["날씨", "뉴스", "최근", "오늘", "현재", "어떻게 돼", "어디"]
+    search_keywords = ["날씨", "뉴스", "최근", "지금", "현재 기온", "비", "눈", "맑음", "흐림"]
     needs_search = any(kw in user_message for kw in search_keywords)
 
     search_result = ""
     if needs_search:
         search_result = await search_naver(user_message)
 
-    system_prompt = f"""당신은 FullFit 화장품 풀필먼트 센터의 AI 운영 어시스턴트입니다.
-반드시 한국어로만 답변하세요. 영어, 한자, 일본어 사용 절대 금지.
-같은 내용을 반복하지 마세요. 200자 이내로 간결하게 답변하세요.
+    system_prompt = f"""당신은 FullFit 운영 어시스턴트입니다. 한국어로만 답변하세요.
 
 [운영 데이터]
 {context}
 
-{f"[웹 검색 결과]{chr(10)}{search_result}" if search_result else ""}
+{f"[검색 결과]{chr(10)}{search_result}" if search_result else ""}
 
-답변 규칙:
-- 운영 데이터 질문 → 데이터 기반으로 정확하게
-- 웹 검색 결과 있으면 → 검색 결과 요약해서 답변
-- 데이터에 없으면 → "해당 정보가 없습니다" 한 번만
-- 절대 반복 금지"""
+[절대 규칙]
+- 2-3문장으로만 답변
+- "운영 데이터에서", "웹 검색 결과에 따르면", "해당 정보가 없습니다" 같은 메타 설명 절대 금지
+- 핵심 정보만 자연스럽게 말하기
+- 날씨 질문이면 그냥 날씨만 말하기
+- 운영 질문이면 데이터 기반으로 바로 답하기
+- 영어, 한자, 일본어 절대 금지
+- 같은 말 반복 금지
+
+예시:
+질문: 서울 날씨 어때?
+좋은 답변: 오늘 서울은 흐리고 약한 비가 내리고 있습니다. 기온은 약 12도입니다.
+나쁜 답변: 웹 검색 결과에 따르면... 운영 데이터에서 찾을 수 없어서...
+
+질문: 재고 부족 상품 있어?
+좋은 답변: 현재 구달 흑당근 앰플(8개), 비플레인 장벽크림(12개), 스킨푸드 아이크림(5개)이 재고 부족입니다.
+나쁜 답변: 재고부족상품 목록을 확인해보면..."""
 
     full_prompt = f"{system_prompt}\n\n질문: {user_message}\n\n답변:"
 
@@ -298,11 +313,11 @@ async def chat(
                     "prompt": full_prompt,
                     "stream": False,
                     "options": {
-                        "temperature": 0.1,
+                        "temperature": 0.2,
                         "top_p": 0.9,
                         "repeat_penalty": 1.5,
-                        "num_predict": 200,
-                        "stop": ["\n\n\n", "질문:", "답변:"],
+                        "num_predict": 150,
+                        "stop": ["\n\n", "질문:", "["],
                     },
                 },
             )
