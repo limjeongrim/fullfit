@@ -34,14 +34,90 @@ function fmtTime(isoStr) {
   return `${Math.floor(diff / 3600)}시간 전`
 }
 
+const ZONE_BG = { A: '#FED7AA', B: '#DBEAFE', C: '#EDE9FE', D: '#CCFBF1' }
+const ZONE_LABELS = {
+  A: 'A구역 (고회전 - 출고구 근처)',
+  B: 'B구역 (중회전)',
+  C: 'C구역 (저회전 - 안쪽)',
+  D: 'D구역 (냉장보관)',
+}
+
+function ZoneRow({ zone, fromLocation, fromZone, toLocation, toZone }) {
+  const isFrom = fromZone === zone
+  const isTo   = toZone   === zone
+  return (
+    <div style={{ background: ZONE_BG[zone], padding: '8px', borderBottom: '1px solid #e5e7eb' }}>
+      <div style={{ fontWeight: 'bold', fontSize: '12px', marginBottom: isFrom || isTo ? '4px' : 0 }}>
+        {ZONE_LABELS[zone]}
+      </div>
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+        {isFrom && (
+          <span style={{ background: '#EF4444', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '12px' }}>
+            📦 {fromLocation} (현재)
+          </span>
+        )}
+        {isTo && (
+          <span style={{ background: '#22C55E', color: 'white', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', border: '2px dashed #16A34A' }}>
+            ✓ {toLocation} (이동)
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function WarehouseMiniMap({ fromLocation, fromZone, toLocation, toZone }) {
+  return (
+    <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden', fontSize: '12px' }}>
+      <ZoneRow zone="C" fromLocation={fromLocation} fromZone={fromZone} toLocation={toLocation} toZone={toZone} />
+      <ZoneRow zone="B" fromLocation={fromLocation} fromZone={fromZone} toLocation={toLocation} toZone={toZone} />
+      <ZoneRow zone="A" fromLocation={fromLocation} fromZone={fromZone} toLocation={toLocation} toZone={toZone} />
+      {/* D + work area */}
+      <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
+        <div style={{ background: ZONE_BG['D'], padding: '8px', width: '35%', borderRight: '1px solid #e5e7eb' }}>
+          <div style={{ fontWeight: 'bold', fontSize: '11px' }}>D구역 (냉장)</div>
+          {fromZone === 'D' && (
+            <div style={{ background: '#EF4444', color: 'white', padding: '2px 4px', borderRadius: '4px', marginTop: '4px', fontSize: '11px' }}>
+              📦 {fromLocation}
+            </div>
+          )}
+          {toZone === 'D' && (
+            <div style={{ background: '#22C55E', color: 'white', padding: '2px 4px', borderRadius: '4px', marginTop: '4px', fontSize: '11px' }}>
+              ✓ {toLocation}
+            </div>
+          )}
+        </div>
+        <div style={{ background: '#F9FAFB', padding: '8px', flex: 1, textAlign: 'center', color: '#9CA3AF', fontSize: '12px' }}>
+          작업공간 (포장/검수)
+        </div>
+      </div>
+      {/* RECV / SHIP */}
+      <div style={{ display: 'flex', background: '#F3F4F6' }}>
+        <div style={{ padding: '6px 8px', width: '50%', borderRight: '1px solid #e5e7eb', textAlign: 'center', fontSize: '11px', color: '#6B7280' }}>
+          ↑ RECV 입고구
+        </div>
+        <div style={{ padding: '6px 8px', width: '50%', textAlign: 'center', fontSize: '11px', color: '#6B7280' }}>
+          SHIP 출고구 ↑
+        </div>
+      </div>
+      {/* Route summary */}
+      <div style={{ background: '#FFF7ED', padding: '8px', textAlign: 'center', fontSize: '13px', fontWeight: 'bold', color: '#EA580C' }}>
+        🔴 {fromLocation} ({fromZone}구역) &nbsp;→→→&nbsp; 🟢 {toLocation} ({toZone}구역)
+      </div>
+    </div>
+  )
+}
+
 export default function SlottingPage() {
-  const [data,         setData]         = useState(null)
-  const [loading,      setLoading]      = useState(true)
-  const [tab,          setTab]          = useState('ALL')
-  const [applying,     setApplying]     = useState(null)   // product_id
-  const [applyingAll,  setApplyingAll]  = useState(false)
-  const [confirmAll,   setConfirmAll]   = useState(false)
-  const [applyResult,  setApplyResult]  = useState(null)
+  const [data,          setData]          = useState(null)
+  const [loading,       setLoading]       = useState(true)
+  const [tab,           setTab]           = useState('ALL')
+  const [applying,      setApplying]      = useState(null)   // product_id
+  const [applyingAll,   setApplyingAll]   = useState(false)
+  const [confirmAll,    setConfirmAll]    = useState(false)
+  const [applyResult,   setApplyResult]   = useState(null)
+  const [movementModal, setMovementModal] = useState(null)   // { productId, productName, from, fromZone, to, toZone, reason, turnover }
+  const [successToast,  setSuccessToast]  = useState(null)   // string
 
   function load() {
     setLoading(true)
@@ -53,10 +129,29 @@ export default function SlottingPage() {
 
   useEffect(() => { load() }, [])
 
-  function handleApply(productId) {
+  function handleApply(rec) {
+    setMovementModal({
+      productId:   rec.product_id,
+      productName: rec.product_name,
+      from:        rec.current_location,
+      fromZone:    rec.current_zone,
+      to:          rec.recommended_location,
+      toZone:      rec.recommended_zone,
+      reason:      rec.reason,
+      turnover:    rec.turnover_rate?.toFixed(2),
+    })
+  }
+
+  function doApply() {
+    const { productId, productName, from, to } = movementModal
+    setMovementModal(null)
     setApplying(productId)
     api.post(`/slotting/apply/${productId}`)
-      .then(() => load())
+      .then(() => {
+        setSuccessToast(`${productName}  ${from} → ${to}  이동 완료`)
+        setTimeout(() => setSuccessToast(null), 4000)
+        load()
+      })
       .catch(console.error)
       .finally(() => setApplying(null))
   }
@@ -227,6 +322,7 @@ export default function SlottingPage() {
                     const moved = !r.needs_move
                     return (
                       <tr key={r.product_id}
+                        title={r.needs_move ? `${r.current_location} → ${r.recommended_location} (회전율 향상 예상)` : undefined}
                         className={`border-b border-[#F1F5F9] transition-colors ${
                           r.priority === 'HIGH' && r.needs_move ? 'bg-[#FEF2F2] hover:bg-[#FEE2E2]' :
                           r.priority === 'MEDIUM' && r.needs_move ? 'bg-[#FEFCE8] hover:bg-[#FEF9C3]' :
@@ -263,7 +359,7 @@ export default function SlottingPage() {
                         <td className="px-4 py-3 whitespace-nowrap">
                           {r.needs_move ? (
                             <button
-                              onClick={() => handleApply(r.product_id)}
+                              onClick={() => handleApply(r)}
                               disabled={applying === r.product_id}
                               className="text-xs px-3 py-1.5 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-lg transition-colors disabled:opacity-50">
                               {applying === r.product_id ? '적용 중...' : '적용'}
@@ -285,6 +381,78 @@ export default function SlottingPage() {
             </p>
           )}
         </div>
+
+        {/* Individual success toast */}
+        {successToast && (
+          <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 bg-[#0F172A] text-white rounded-xl px-5 py-3 shadow-2xl">
+            <span className="text-green-400">✅</span>
+            <span className="text-sm font-medium">{successToast}</span>
+          </div>
+        )}
+
+        {/* Movement confirmation modal */}
+        {movementModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h3 className="text-lg font-bold mb-0.5" style={{ color: '#0F172A' }}>상품 이동 확인</h3>
+                <p className="text-sm mb-4" style={{ color: '#64748B' }}>{movementModal.productName}</p>
+
+                {/* Route header */}
+                <div className="flex items-center justify-center gap-4 mb-4 p-3 bg-[#F8FAFC] rounded-xl">
+                  <div className="text-center">
+                    <div className="text-xs mb-1" style={{ color: '#64748B' }}>현재 위치</div>
+                    <div className="px-3 py-1 rounded font-mono font-bold text-sm"
+                      style={{ background: '#FEE2E2', color: '#991B1B' }}>
+                      {movementModal.from}
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: '#EF4444' }}>{movementModal.fromZone}구역</div>
+                  </div>
+                  <div className="text-2xl animate-bounce" style={{ color: '#2563EB' }}>→</div>
+                  <div className="text-center">
+                    <div className="text-xs mb-1" style={{ color: '#64748B' }}>권장 위치</div>
+                    <div className="px-3 py-1 rounded font-mono font-bold text-sm"
+                      style={{ background: '#DCFCE7', color: '#166534' }}>
+                      {movementModal.to}
+                    </div>
+                    <div className="text-xs mt-0.5" style={{ color: '#22C55E' }}>{movementModal.toZone}구역</div>
+                  </div>
+                </div>
+
+                {/* Warehouse mini map */}
+                <div className="mb-4">
+                  <div className="text-sm font-medium mb-2" style={{ color: '#374151' }}>창고 위치 안내</div>
+                  <WarehouseMiniMap
+                    fromLocation={movementModal.from}
+                    fromZone={movementModal.fromZone}
+                    toLocation={movementModal.to}
+                    toZone={movementModal.toZone}
+                  />
+                </div>
+
+                {/* Reason + stats */}
+                <div className="p-3 rounded-xl mb-5 text-sm" style={{ background: '#EFF6FF' }}>
+                  <div><span className="font-semibold" style={{ color: '#1D4ED8' }}>이동 이유: </span>
+                    <span style={{ color: '#374151' }}>{movementModal.reason}</span></div>
+                  {movementModal.turnover && (
+                    <div className="mt-1"><span className="font-semibold" style={{ color: '#1D4ED8' }}>회전율: </span>
+                      <span style={{ color: '#374151' }}>{movementModal.turnover}회/월</span></div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => setMovementModal(null)}
+                    className="py-3 border-2 border-[#E2E8F0] rounded-xl text-sm font-semibold hover:bg-[#F8FAFC]"
+                    style={{ color: '#374151' }}>취소</button>
+                  <button onClick={doApply}
+                    className="py-3 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-xl text-sm font-bold">
+                    이동 확정
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Confirm apply-all modal */}
         {confirmAll && (

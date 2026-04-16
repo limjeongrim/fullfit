@@ -22,11 +22,21 @@ function TypingIndicator() {
   )
 }
 
+const INITIAL_MESSAGE = {
+  role: 'assistant',
+  content: '안녕하세요! FullFit 운영 현황에 대해 무엇이든 물어보세요. 재고, 주문, 이슈 등 실시간 데이터를 기반으로 답변드립니다.'
+}
+
 export default function AIAssistant() {
   const [open, setOpen] = useState(false)
-  const [messages, setMessages] = useState([
-    { role: 'assistant', content: '안녕하세요! FullFit 운영 현황에 대해 무엇이든 물어보세요. 재고, 주문, 이슈 등 실시간 데이터를 기반으로 답변드립니다.' }
-  ])
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem('fullfit_ai_chat')
+      return saved ? JSON.parse(saved) : [INITIAL_MESSAGE]
+    } catch {
+      return [INITIAL_MESSAGE]
+    }
+  })
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
@@ -40,6 +50,19 @@ export default function AIAssistant() {
     if (open) setTimeout(() => inputRef.current?.focus(), 100)
   }, [open])
 
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('fullfit_ai_chat', JSON.stringify(messages))
+    } catch (e) {
+      console.error('Failed to save chat history', e)
+    }
+  }, [messages])
+
+  const clearHistory = () => {
+    sessionStorage.removeItem('fullfit_ai_chat')
+    setMessages([{ role: 'assistant', content: '대화가 초기화되었습니다. 무엇이든 물어보세요!' }])
+  }
+
   const sendMessage = async (message) => {
     if (!message.trim() || loading) return
     const text = message.trim()
@@ -48,9 +71,13 @@ export default function AIAssistant() {
     setLoading(true)
     try {
       const contextRes = await api.get('/ai/context')
+      const recentHistory = messages.slice(-3).map(m =>
+        `${m.role === 'user' ? '이전질문' : '이전답변'}: ${m.content}`
+      ).join('\n')
       const res = await api.post('/ai/chat', {
         message: text,
-        context: JSON.stringify(contextRes.data, null, 2),
+        context: contextRes.data.data,
+        history: recentHistory,
       })
       setMessages(prev => [...prev, { role: 'assistant', content: res.data.response }])
     } catch {
@@ -99,10 +126,18 @@ export default function AIAssistant() {
             style={{ background: 'linear-gradient(135deg, #7C3AED, #2563EB)' }}>
             <div>
               <h3 className="font-bold text-white text-[15px] leading-tight">FullFit AI 어시스턴트 🤖</h3>
-              <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>Powered by Ollama llama3.1:8b</p>
+              <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.7)' }}>Powered by Ollama qwen3:8b</p>
             </div>
-            <button onClick={() => setOpen(false)}
-              className="text-white/70 hover:text-white text-xl leading-none ml-3 mt-0.5">×</button>
+            <div className="flex items-center gap-2 ml-3 mt-0.5">
+              <button
+                onClick={clearHistory}
+                className="text-white/60 hover:text-white text-xs px-2 py-0.5 rounded border border-white/20 hover:border-white/50 transition-colors"
+              >
+                초기화
+              </button>
+              <button onClick={() => setOpen(false)}
+                className="text-white/70 hover:text-white text-xl leading-none">×</button>
+            </div>
           </div>
 
           {/* Messages */}
