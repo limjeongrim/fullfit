@@ -173,7 +173,7 @@ def seed_products(db):
     # (name, sku, barcode, category, stock, zone, row, col, expiry, storage_type)
     brand_specs = [
         ("dalba@fullfit.com", [
-            ("달바 화이트트러플 퍼스트 스프레이 세럼 150ml", "DAL-001", "8801234560001", "스킨케어", 180, "A", 1, 1, date(2027, 6, 30), CD),
+            ("달바 화이트트러플 퍼스트 스프레이 세럼 150ml", "DAL-001", "8801234560001", "스킨케어", 180, "D", 1, 1, date(2027, 6, 30), CD),
             ("달바 울트라V 리프팅 펩타이드 에센스",          "DAL-002", "8801234560002", "스킨케어", 120, "B", 1, 1, date(2027, 3, 31), RT),
             ("달바 선크림 선세럼 SPF50+",                    "DAL-003", "8801234560003", "선케어",   250, "A", 1, 2, date(2026, 12, 31), RT),
             ("달바 토너패드 200매",                          "DAL-004", "8801234560004", "스킨케어", 150, "A", 2, 1, date(2027, 1, 31), RT),
@@ -186,7 +186,7 @@ def seed_products(db):
             ("클리오 프로 아이 팔레트 08호",         "CLI-005", "8809000001005", "색조",  150, "B", 1, 2, date(2027, 6, 30), RT),
         ]),
         ("goodal@fullfit.com", [
-            ("구달 청귤 비타C 잡티세럼 30ml",    "GOO-001", "8809000002001", "스킨케어", 280, "A", 3, 1, date(2026, 10, 31), CD),
+            ("구달 청귤 비타C 잡티세럼 30ml",    "GOO-001", "8809000002001", "스킨케어", 280, "D", 3, 1, date(2026, 10, 31), CD),
             ("구달 아이스 어성초 수딩크림 100ml", "GOO-002", "8809000002002", "스킨케어", 220, "A", 3, 2, date(2026, 12, 31), RT),
             ("구달 흑당근 레티놀 탄력 앰플 30ml", "GOO-003", "8809000002003", "스킨케어",   8, "B", 2, 1, date(2027, 3, 31), RT),
             ("구달 청귤 비타C 토너 150ml",        "GOO-004", "8809000002004", "스킨케어", 180, "A", 3, 3, date(2026, 11, 30), RT),
@@ -1084,6 +1084,49 @@ async def order_simulator():
         await asyncio.sleep(15)
 
 
+def seed_reorder_recommendations(db):
+    if db.query(ReorderRecommendation).count() > 0:
+        return
+
+    from backend.models.demand_history import DemandHistory as DH
+    from sqlalchemy import func as sqlfunc
+    from datetime import timedelta as td
+
+    thirty_days_ago = date.today() - td(days=30)
+    products = db.query(Product).all()
+    added = 0
+    for product in products:
+        inv = db.query(Inventory).filter(Inventory.product_id == product.id).first()
+        if not inv:
+            continue
+
+        total_sold = db.query(sqlfunc.sum(DH.quantity_sold)).filter(
+            DH.product_id == product.id,
+            DH.date >= thirty_days_ago
+        ).scalar() or 0
+        daily_demand = round(total_sold / 30, 2) if total_sold > 0 else 5.0
+
+        lead_time = 3
+        safety_stock = daily_demand * 7
+        reorder_point = int(daily_demand * lead_time + safety_stock)
+        eoq = max(10, int(daily_demand * 30))
+        status = "PENDING" if inv.quantity <= reorder_point else "DISMISSED"
+
+        db.add(ReorderRecommendation(
+            product_id=product.id,
+            seller_id=product.seller_id,
+            recommended_qty=eoq,
+            reorder_point=reorder_point,
+            current_stock=inv.quantity,
+            daily_demand=daily_demand,
+            lead_time_days=lead_time,
+            status=status,
+        ))
+        added += 1
+    db.commit()
+    print(f"[Seed] ReorderRecommendation {added}건 생성 완료")
+
+
 # ── Startup ────────────────────────────────────────────────────────────────────
 
 @app.on_event("startup")
@@ -1105,6 +1148,7 @@ async def startup():
         seed_notifications(db)
         seed_chat(db)
         seed_demand_history(db)
+        seed_reorder_recommendations(db)
         seed_vrp_deliveries(db)
         seed_inbound_schedules(db)
         seed_order_histories(db)

@@ -17,59 +17,49 @@ router = APIRouter()
 
 # ── Algorithm ──────────────────────────────────────────────────────────────────
 
-def create_batch_groups(orders: list[dict], max_batch_size: int = 5, max_items_per_batch: int = 20) -> list[list[dict]]:
+def create_batch_groups(orders_with_items: list[dict], max_batch_size: int = 5, max_items: int = 20) -> list[list[dict]]:
     """
-    Group orders into batches using SKU-overlap greedy heuristic.
-    Orders with items are grouped by SKU overlap.
-    Orders without items are grouped into plain size-capped batches.
+    Group orders into batches.
+    1. Sort orders by number of SKUs (most SKUs first) so high-overlap seeds come first.
+    2. Add orders that share ≥1 SKU with the current batch.
+    3. If batch still has <3 orders, also accept same-channel orders (no SKU overlap needed).
+    4. Fall through: remaining orders are grouped by channel in size-capped batches.
     """
-    if not orders:
+    if not orders_with_items:
         return []
 
-    order_map = {o["order_id"]: o for o in orders}
-
-    # Split by whether order has items
-    with_items    = [o for o in orders if o["items"]]
-    without_items = [o for o in orders if not o["items"]]
+    # Sort: most SKUs first so richer seeds attract more neighbours
+    unassigned = sorted(orders_with_items, key=lambda o: len(o["skus"]), reverse=True)
 
     batches: list[list[dict]] = []
 
-    # ── SKU-overlap grouping for orders that have items ──────────────────────
-    if with_items:
-        order_skus = {o["order_id"]: set(i["sku"] for i in o["items"]) for o in with_items}
-        order_qty  = {o["order_id"]: sum(i["qty"] for i in o["items"]) for o in with_items}
-        unassigned = [o["order_id"] for o in with_items]
+    while unassigned:
+        current_batch = [unassigned.pop(0)]
+        current_skus = set(current_batch[0]["skus"])
+        current_items = current_batch[0]["total_qty"]
+        current_channel = current_batch[0]["channel"]
 
-        while unassigned:
-            def _overlap_score(oid):
-                my_skus = order_skus[oid]
-                return sum(1 for other in unassigned if other != oid and my_skus & order_skus[other])
+        remaining = []
+        for order in unassigned:
+            if len(current_batch) >= max_batch_size:
+                remaining.append(order)
+                continue
+            if current_items + order["total_qty"] > max_items:
+                remaining.append(order)
+                continue
 
-            seed_id    = max(unassigned, key=_overlap_score)
-            batch_ids  = [seed_id]
-            unassigned.remove(seed_id)
-            batch_skus  = set(order_skus[seed_id])
-            batch_items = order_qty[seed_id]
+            has_sku_overlap = bool(current_skus & set(order["skus"]))
+            same_channel = order["channel"] == current_channel
 
-            while len(batch_ids) < max_batch_size and unassigned:
-                candidates = [
-                    oid for oid in unassigned
-                    if order_skus[oid] & batch_skus
-                    and batch_items + order_qty[oid] <= max_items_per_batch
-                ]
-                if not candidates:
-                    break
-                next_id = max(candidates, key=lambda oid: len(order_skus[oid] & batch_skus))
-                batch_ids.append(next_id)
-                unassigned.remove(next_id)
-                batch_skus  |= order_skus[next_id]
-                batch_items += order_qty[next_id]
+            if has_sku_overlap or (same_channel and len(current_batch) < 3):
+                current_batch.append(order)
+                current_skus.update(order["skus"])
+                current_items += order["total_qty"]
+            else:
+                remaining.append(order)
 
-            batches.append([order_map[oid] for oid in batch_ids])
-
-    # ── Plain size-capped batches for orders without items ───────────────────
-    for i in range(0, len(without_items), max_batch_size):
-        batches.append(without_items[i : i + max_batch_size])
+        batches.append(current_batch)
+        unassigned = remaining
 
     return batches
 
@@ -85,10 +75,16 @@ def _build_order_data(orders: list[Order]) -> list[dict]:
                 "sku":          item.product.sku,
                 "qty":          item.quantity,
             })
+        skus = [i["sku"] for i in items]
+        total_qty = sum(i["qty"] for i in items)
+        channel = o.channel.value if hasattr(o.channel, "value") else str(o.channel or "")
         result.append({
             "order_id":     o.id,
             "order_number": o.order_number,
             "items":        items,
+            "skus":         skus,
+            "total_qty":    total_qty,
+            "channel":      channel,
         })
     return result
 

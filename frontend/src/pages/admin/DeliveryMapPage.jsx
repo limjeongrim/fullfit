@@ -67,10 +67,16 @@ export default function DeliveryMapPage() {
     <SidebarLayout>
       <div className="h-[calc(100vh-56px)] bg-[#F8FAFC] flex flex-col">
 
+        {/* Page header */}
+        <div className="bg-white border-b border-[#E2E8F0] px-6 py-3 shrink-0">
+          <h1 className="text-base font-bold leading-tight" style={{ color: '#0F172A' }}>출고 현황 지도</h1>
+          <p className="text-xs mt-0.5" style={{ color: '#94A3B8' }}>택배사별 출고 현황</p>
+        </div>
+
         {/* Stats bar */}
         <div className="bg-white border-b border-[#E2E8F0] px-6 py-2.5 flex flex-wrap items-center gap-3 shrink-0">
           <span className="text-sm font-semibold" style={{ color: '#374151' }}>
-            오늘 출고 {deliveries.length}건
+            오늘 출고: {deliveries.length}건
           </span>
           <span className="w-px h-4 bg-[#E2E8F0]" />
 
@@ -158,18 +164,17 @@ export default function DeliveryMapPage() {
                       <button
                         key={d.id}
                         onClick={() => setFlyToId(d.id)}
-                        className="w-full text-left px-4 py-2.5 border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors"
+                        className="w-full text-left px-4 py-2 border-b border-[#F1F5F9] hover:bg-[#F8FAFC] transition-colors"
                       >
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-xs font-mono font-semibold truncate" style={{ color: '#374151' }}>
-                            {d.order_number}
-                          </span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold shrink-0 ml-1 ${statusMeta.cls}`}>
+                        <div className="flex items-center gap-1.5 text-xs" style={{ color: '#374151' }}>
+                          <span className="font-mono font-semibold shrink-0">{d.order_number}</span>
+                          <span style={{ color: '#CBD5E1' }}>|</span>
+                          <span className="font-medium truncate">{d.receiver_name}</span>
+                          <span style={{ color: '#CBD5E1' }}>|</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold shrink-0 ${statusMeta.cls}`}>
                             {statusMeta.label}
                           </span>
                         </div>
-                        <p className="text-xs font-medium" style={{ color: '#0F172A' }}>{d.receiver_name}</p>
-                        <p className="text-[11px] truncate" style={{ color: '#94A3B8' }}>{d.receiver_address}</p>
                       </button>
                     )
                   })}
