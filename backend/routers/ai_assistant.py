@@ -149,20 +149,21 @@ async def get_context(
 
     # ── 전체 재고 상세 (LOT/유통기한/ABC/구역) ────────────────────────────────
     try:
-        inv_detail_lines = []
-        for p, inv in inv_items:
-            days_left_expiry = (inv.expiry_date - today).days if inv.expiry_date else None
-            lot_str    = f"LOT번호=[{inv.lot_number}]" if inv.lot_number else "LOT번호=없음"
-            expiry_str = f"유통기한만료일={inv.expiry_date}(남은일수={days_left_expiry}일)" if inv.expiry_date else ""
-            abc_str    = f"ABC등급={p.abc_grade}" if hasattr(p, 'abc_grade') and p.abc_grade else ""
-            zone_str   = f"창고구역={p.warehouse_zone}구역" if p.warehouse_zone else ""
-            parts = [f"상품명={p.name}", f"SKU={p.sku}", f"현재재고={inv.quantity}개", lot_str]
-            if expiry_str: parts.append(expiry_str)
-            if abc_str:    parts.append(abc_str)
-            if zone_str:   parts.append(zone_str)
-            inv_detail_lines.append("  - " + " | ".join(parts))
-        inv_detail_text = "\n".join(inv_detail_lines) if inv_detail_lines else "  데이터 없음"
-        print(f"[AI Context] 재고상세: {len(inv_detail_lines)}건")
+        inv_detail_text = ""
+        all_inv = db.query(Product, Inventory).join(
+            Inventory, Inventory.product_id == Product.id
+        ).all()
+
+        for p, inv in all_inv:
+            days_left_expiry = (inv.expiry_date - date.today()).days if inv.expiry_date else None
+            expiry_str = f"{inv.expiry_date}(D-{days_left_expiry})" if inv.expiry_date else "-"
+            lot_str = inv.lot_number if inv.lot_number else "-"
+            abc = p.abc_grade if hasattr(p, 'abc_grade') and p.abc_grade else "-"
+            zone = p.warehouse_zone if p.warehouse_zone else "-"
+
+            inv_detail_text += f"{p.name}|SKU:{p.sku}|재고:{inv.quantity}|LOT:{lot_str}|유통기한:{expiry_str}|ABC:{abc}|구역:{zone}\n"
+
+        print(f"[AI Context] 재고상세: {len(all_inv)}건, 길이:{len(inv_detail_text)}chars")
     except Exception as e:
         print(f"[AI Context] 재고상세 오류: {e}")
         inv_detail_text = "  데이터 없음"
@@ -251,42 +252,33 @@ async def get_context(
         print(f"[AI Context] 창고 오류: {e}")
         warehouse_text = "  데이터 없음"
 
-    # ── 보충입고 요청 (calculated from Inventory + DemandHistory) ────────────
+    # ── 수요예측 + 보충입고 (forecast.py와 동일한 best-MA 계산) ───────────────
+    seller_name_map = {
+        "CLIO Cosmetics": "클리오", "goodal": "구달",
+        "b.plain": "비플레인", "BBIA Cosmetic": "삐아",
+        "SKINFOOD": "스킨푸드", "d'Alba": "달바",
+    }
+    forecast_text = ""
+    restock_text  = "  데이터 없음"
     try:
-        from backend.models.demand_history import DemandHistory
-
-        seller_name_map = {
-            "CLIO Cosmetics": "클리오", "goodal": "구달",
-            "b.plain": "비플레인", "BBIA Cosmetic": "삐아",
-            "SKINFOOD": "스킨푸드", "d'Alba": "달바",
-        }
-        seven_days_ago  = date.today() - timedelta(days=7)
-        thirty_days_ago = date.today() - timedelta(days=30)
+        from backend.routers.forecast import _build_product_forecast
 
         all_products_inv = db.query(Product, Inventory).join(
             Inventory, Inventory.product_id == Product.id
         ).all()
 
         restock_lines = []
+        forecast_lines = []
         for product, inv in all_products_inv:
-            recent_sold = db.query(func.sum(DemandHistory.quantity_sold)).filter(
-                DemandHistory.product_id == product.id,
-                DemandHistory.date >= seven_days_ago
-            ).scalar() or 0
-            monthly_sold = db.query(func.sum(DemandHistory.quantity_sold)).filter(
-                DemandHistory.product_id == product.id,
-                DemandHistory.date >= thirty_days_ago
-            ).scalar() or 0
+            fc = _build_product_forecast(db, product)
+            daily_demand = fc["avg_daily_sales"]
+            days_left    = fc["days_of_stock"]
+            window       = fc["recommended_window"]
+            reorder_point = int(daily_demand * 3 + daily_demand * 7)
 
-            daily_7  = round(recent_sold / 7,  1) if recent_sold  > 0 else 0
-            daily_30 = round(monthly_sold / 30, 1) if monthly_sold > 0 else 0
-            daily_demand = daily_7 if daily_7 > 0 else (daily_30 if daily_30 > 0 else 1.0)
-
-            days_left = round(inv.quantity / daily_demand, 1) if daily_demand > 0 else 999
-
-            lead_time    = 3
-            safety_stock = daily_demand * 7
-            reorder_point = round(daily_demand * lead_time + safety_stock, 0)
+            forecast_lines.append(
+                f"{product.name}|일평균:{daily_demand}개(MA{window})|소진:{days_left}일후|재고:{inv.quantity}개"
+            )
 
             urgency = "긴급" if inv.quantity < 20 else ("주의" if days_left < 14 else None)
             if urgency is None:
@@ -297,22 +289,23 @@ async def get_context(
 
             restock_lines.append(
                 f"  - [{urgency}] {sname} | {product.name} | "
-                f"현재재고={inv.quantity}개 | 일평균판매량={daily_demand}개/일 | "
-                f"재고소진예상=지금으로부터{days_left}일후 | "
-                f"재주문점={int(reorder_point)}개"
+                f"현재재고:{inv.quantity}개 | 일평균판매:{daily_demand}개/일(MA{window}) | "
+                f"소진예상:{days_left}일후 | 재주문점:{reorder_point}개"
             )
+
+        forecast_text = "\n".join(forecast_lines) if forecast_lines else "  데이터 없음"
+        print(f"[AI Context] 수요예측 샘플: {forecast_text[:200]}")
 
         urgent_count = sum(1 for l in restock_lines if '[긴급]' in l)
         restock_text = (
             f"총 {len(restock_lines)}건 (긴급:{urgent_count}건)\n" + "\n".join(restock_lines)
             if restock_lines else "긴급/주의 상품 없음"
         )
-        print(f"[AI Context] 보충입고(계산): {len(restock_lines)}건, 긴급:{urgent_count}건")
+        print(f"[AI Context] 보충입고: {len(restock_lines)}건, 긴급:{urgent_count}건")
     except Exception as e:
         import traceback
         traceback.print_exc()
-        print(f"[AI Context] 보충입고 오류: {e}")
-        restock_text = "  데이터 없음"
+        print(f"[AI Context] 보충입고/수요예측 오류: {e}")
 
     # ── 입고 예정 ─────────────────────────────────────────────────────────────
     try:
@@ -347,7 +340,13 @@ async def get_context(
     # ── 내일 입고 스케줄 ──────────────────────────────────────────────────────
     try:
         from backend.models.inbound_schedule import InboundSchedule
-        tomorrow = today + timedelta(days=1)
+        tomorrow = date.today() + timedelta(days=1)
+        print(f"[AI Context] 내일 날짜: {tomorrow}")
+        cols = [c.name for c in InboundSchedule.__table__.columns]
+        print(f"[AI Context] InboundSchedule 컬럼: {cols}")
+        all_schedules = db.query(InboundSchedule).all()
+        for s in all_schedules[:5]:
+            print(f"[AI Context] 스케줄 날짜: {s.scheduled_date}, 시간: {s.time_slot}, seller_id: {s.seller_id}")
         scheduled = db.query(InboundSchedule).filter(
             InboundSchedule.scheduled_date == tomorrow
         ).order_by(InboundSchedule.time_slot).all()
@@ -363,13 +362,23 @@ async def get_context(
                 p = s.inbound.product
                 product_info = f" | {p.name} {s.inbound.quantity}개"
             entry = f"  - {time_slot} | 도크{s.dock_number} | {seller_name}{product_info}"
-            if time_slot[:2] in ('09', '10', '11'):
-                sched_morning.append(entry)
-            else:
-                sched_afternoon.append(entry)
+            if time_slot and time_slot != "미정":
+                try:
+                    hour = int(time_slot[:2])
+                    if 9 <= hour <= 11:
+                        sched_morning.append(entry)
+                    elif 14 <= hour <= 17:
+                        sched_afternoon.append(entry)
+                    # 12, 13시는 점심시간이라 제외
+                except ValueError:
+                    pass
         morning_text   = "\n".join(sched_morning)   if sched_morning   else "  없음"
         afternoon_text = "\n".join(sched_afternoon) if sched_afternoon else "  없음"
-        print(f"[AI Context] 입고스케줄: 오전{len(sched_morning)}건 오후{len(sched_afternoon)}건")
+        morning_count   = morning_text.count('- ')
+        afternoon_count = afternoon_text.count('- ')
+        print(f"[AI Context] 입고스케줄: 오전{morning_count}건 오후{afternoon_count}건")
+        print(f"[AI Context] 입고스케줄 오전내용: {morning_text[:100]}")
+        print(f"[AI Context] 입고스케줄 오후내용: {afternoon_text[:100]}")
     except Exception as e:
         print(f"[AI Context] 입고스케줄 오류: {e}")
         morning_text = afternoon_text = "  데이터 없음"
@@ -510,14 +519,15 @@ async def get_context(
 === 상품별 창고 위치 (슬로팅) ===
 {slotting_text}
 
+=== 수요예측 (일평균판매/소진예상) ===
+{forecast_text}
+
 === 보충 입고 요청 (긴급/권고) ===
 {restock_text}
 
-=== 내일 입고 스케줄 ===
-오전 (09:00~12:00):
-{morning_text}
-오후 (14:00~17:00):
-{afternoon_text}
+=== 내일 입고 스케줄 (오전/오후 구분) ===
+오전(09:00-12:00): {morning_text}
+오후(14:00-17:00): {afternoon_text}
 
 === 전체 입고 예정 ===
 {inbound_text}
@@ -545,78 +555,52 @@ def filter_context_for_question(full_context: str, message: str) -> str:
     lines = full_context.split('\n')
 
     sections = {}
-    current_section_name = ""
-    current_section = []
+    current_key = "기본"
+    current_lines = []
 
     for line in lines:
         if line.startswith('==='):
-            if current_section_name and current_section:
-                sections[current_section_name] = '\n'.join(current_section)
-            current_section_name = line
-            current_section = [line]
+            if current_lines:
+                sections[current_key] = '\n'.join(current_lines)
+            current_key = line.strip('= ')
+            current_lines = [line]
         else:
-            current_section.append(line)
-    if current_section_name and current_section:
-        sections[current_section_name] = '\n'.join(current_section)
+            current_lines.append(line)
+    if current_lines:
+        sections[current_key] = '\n'.join(current_lines)
 
-    # Always include date and order summary
-    base = ""
-    for k, v in sections.items():
-        if '오늘' in k or '주문 현황' in k:
-            base += v + "\n"
+    # Always include basic order/date info
+    base_keys = ["주문 현황", "오늘"]
+    base = '\n'.join(v for k, v in sections.items() if any(b in k for b in base_keys))
+
+    # Keyword to section mapping
+    keyword_map = {
+        ("유통기한", "만료", "lot", "로트", "lot번호", "abc", "구역", "보관"): ["재고 상세", "LOT", "유통"],
+        ("보충", "긴급", "소진", "재주문"): ["보충 입고", "재고부족"],
+        ("일평균", "소진", "예상", "수요", "판매량", "forecast"): ["수요예측", "소진", "보충 입고"],
+        ("셀러", "브랜드", "주문 많"): ["브랜드별"],
+        ("채팅", "미읽음", "답장"): ["채팅"],
+        ("입고", "스케줄", "오전", "오후", "내일", "도크"): ["입고", "스케줄", "인바운드"],
+        ("프로모션", "세일", "행사"): ["프로모션"],
+        ("이슈", "문제"): ["이슈"],
+        ("정산", "미확정"): ["정산"],
+        ("배송", "택배", "이동중"): ["배송"],
+        ("반품",): ["반품"],
+        ("냉장",): ["냉장"],
+        ("슬로팅", "위치", "구역"): ["슬로팅", "창고"],
+    }
 
     extra = ""
+    for keywords, section_keys in keyword_map.items():
+        if any(k in msg for k in keywords):
+            for sk in section_keys:
+                for k, v in sections.items():
+                    if sk in k:
+                        extra += v + "\n"
 
-    if any(k in msg for k in ["보충", "긴급", "재고부족", "재고 부족"]):
-        for k, v in sections.items():
-            if '보충' in k or '재고 부족' in k:
-                extra += v + "\n"
-
-    if any(k in msg for k in ["셀러", "브랜드", "주문 많"]):
-        for k, v in sections.items():
-            if '브랜드별' in k or '셀러' in k:
-                extra += v + "\n"
-
-    if any(k in msg for k in ["채팅", "미읽음", "답장"]):
-        for k, v in sections.items():
-            if '채팅' in k:
-                extra += v + "\n"
-
-    if any(k in msg for k in ["입고", "스케줄"]):
-        for k, v in sections.items():
-            if '입고' in k:
-                extra += v + "\n"
-
-    if any(k in msg for k in ["프로모션", "세일", "행사", "올영"]):
-        for k, v in sections.items():
-            if '프로모션' in k:
-                extra += v + "\n"
-
-    if any(k in msg for k in ["이슈", "문제", "오류"]):
-        for k, v in sections.items():
-            if '이슈' in k:
-                extra += v + "\n"
-
-    if any(k in msg for k in ["정산", "미확정", "확정"]):
-        for k, v in sections.items():
-            if '정산' in k:
-                extra += v + "\n"
-
-    if any(k in msg for k in ["재고", "창고", "구역"]):
-        for k, v in sections.items():
-            if '재고' in k or '창고' in k:
-                extra += v + "\n"
-
-    if any(k in msg for k in ["배송", "택배", "출고"]):
-        for k, v in sections.items():
-            if '배송' in k:
-                extra += v + "\n"
-
-    # If no specific keyword matched, send all
-    if not extra:
-        return full_context
-
-    return base + extra
+    result = base + "\n" + extra if extra else full_context
+    print(f"[AI Chat] 원본 context: {len(full_context)}chars → 필터링: {len(result)}chars")
+    return result
 
 
 @router.post("/chat")
@@ -635,7 +619,6 @@ async def chat(
 
     # Filter to only relevant sections
     filtered_context = filter_context_for_question(full_context, user_message)
-    print(f"[AI Chat] 원본 context: {len(full_context)}chars → 필터링: {len(filtered_context)}chars")
 
     search_result = ""
     search_keywords = ["날씨", "뉴스", "최근", "지금 기온", "비", "눈"]
@@ -684,6 +667,7 @@ async def chat(
                         "temperature": 0.1,
                         "repeat_penalty": 1.4,
                         "num_predict": 300,
+                        "num_ctx": 8192,
                     },
                 },
             )
