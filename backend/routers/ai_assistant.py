@@ -82,26 +82,80 @@ async def get_context(
 
     # ── 배송 현황 ─────────────────────────────────────────────────────────────
     try:
-        total_deliveries  = db.query(Delivery).count()
-        in_transit        = db.query(Delivery).filter(Delivery.status == "IN_TRANSIT").count()
-        out_for_delivery  = db.query(Delivery).filter(Delivery.status == "OUT_FOR_DELIVERY").count()
+        total_deliveries   = db.query(Delivery).count()
+        in_transit         = db.query(Delivery).filter(Delivery.status == "IN_TRANSIT").count()
+        out_for_delivery   = db.query(Delivery).filter(Delivery.status == "OUT_FOR_DELIVERY").count()
         delivered_delivery = db.query(Delivery).filter(Delivery.status == "DELIVERED").count()
-        delivered_today   = db.query(Delivery).filter(
+        delivered_today    = db.query(Delivery).filter(
             Delivery.status == "DELIVERED",
             func.date(Delivery.updated_at) == today
         ).count()
+        print(f"[AI Context] 배송: 전체={total_deliveries} 이동중={in_transit} 배달출발={out_for_delivery} 완료={delivered_delivery}")
     except Exception as e:
+        import traceback; traceback.print_exc()
         print(f"[AI Context] 배송 오류: {e}")
         total_deliveries = in_transit = out_for_delivery = delivered_delivery = delivered_today = 0
 
-    # ── 반품 현황 ─────────────────────────────────────────────────────────────
+    # ── 택배사별 현황 (carrier 필드) ──────────────────────────────────────────
     try:
-        total_returns    = db.query(ReturnRequest).count()
-        return_requested = db.query(ReturnRequest).filter(ReturnRequest.status == "REQUESTED").count()
-        return_in_review = db.query(ReturnRequest).filter(ReturnRequest.status == "IN_REVIEW").count()
+        today_carrier = db.query(
+            Delivery.carrier,
+            func.count(Delivery.id).label('cnt')
+        ).filter(
+            func.date(Delivery.created_at) == today
+        ).group_by(Delivery.carrier).all()
+        courier_today_text = ""
+        for carrier, cnt in today_carrier:
+            courier_today_text += f"  - {carrier.value if hasattr(carrier, 'value') else carrier}: {cnt}건\n"
+        courier_today_text = courier_today_text.rstrip() or "  없음"
+
+        transit_carrier = db.query(
+            Delivery.carrier,
+            func.count(Delivery.id).label('cnt')
+        ).filter(
+            Delivery.status == "IN_TRANSIT"
+        ).group_by(Delivery.carrier).all()
+        transit_courier_text = ""
+        for carrier, cnt in transit_carrier:
+            transit_courier_text += f"  - {carrier.value if hasattr(carrier, 'value') else carrier}: {cnt}건\n"
+        transit_courier_text = transit_courier_text.rstrip() or "  없음"
+        print(f"[AI Context] 택배사별 이동중: {transit_courier_text[:100]}")
     except Exception as e:
+        import traceback; traceback.print_exc()
+        print(f"[AI Context] 택배사 오류: {e}")
+        courier_today_text = transit_courier_text = "  없음"
+
+    # ── 반품 현황 ─────────────────────────────────────────────────────────────
+    _seller_name_map = {
+        "CLIO Cosmetics": "클리오", "goodal": "구달",
+        "b.plain": "비플레인", "BBIA Cosmetic": "삐아",
+        "SKINFOOD": "스킨푸드", "d'Alba": "달바",
+    }
+    try:
+        returns = db.query(ReturnRequest).all()
+        total_returns = len(returns)
+        return_detail_lines = []
+        for r in returns:
+            sname = _seller_name_map.get(
+                r.seller.full_name if r.seller else "",
+                r.seller.full_name if r.seller else "알수없음"
+            )
+            order_num = r.order.order_number if r.order else "알수없음"
+            reason_val = r.reason.value if hasattr(r.reason, 'value') else str(r.reason)
+            _reason_kr = {"DEFECTIVE": "상품불량", "CHANGE_OF_MIND": "단순변심", "WRONG_ITEM": "오배송", "DAMAGED": "파손", "OTHER": "기타"}
+            reason_kr = _reason_kr.get(reason_val, reason_val)
+            status_val = r.status.value if hasattr(r.status, 'value') else str(r.status)
+            created = str(r.created_at)[:10] if r.created_at else ""
+            return_detail_lines.append(
+                f"  - {sname} | 주문:{order_num} | 사유:{reason_kr} | 상태:{status_val} | 접수일:{created}"
+            )
+        return_detail_text = "\n".join(return_detail_lines) or "  없음"
+        print(f"[AI Context] 반품상세: {total_returns}건")
+    except Exception as e:
+        import traceback; traceback.print_exc()
         print(f"[AI Context] 반품 오류: {e}")
-        total_returns = return_requested = return_in_review = 0
+        total_returns = 0
+        return_detail_text = "  데이터 없음"
 
     # ── 재고 현황 + 유통기한 + 재고부족 ──────────────────────────────────────
     inv_items = []
@@ -172,12 +226,14 @@ async def get_context(
     try:
         channel_orders = db.query(
             Order.channel,
-            func.count(Order.id).label('count')
+            func.count(Order.id).label('cnt')
         ).group_by(Order.channel).all()
-        channel_text = "\n".join([
-            f"  - {ch.value if hasattr(ch, 'value') else ch}: {cnt}건"
-            for ch, cnt in channel_orders
-        ]) or "  데이터 없음"
+        total_order_count = sum(cnt for _, cnt in channel_orders)
+        channel_text = " | ".join(
+            f"{(ch.value if hasattr(ch, 'value') else ch)}:{cnt}건({round(cnt/total_order_count*100,1) if total_order_count else 0}%)"
+            for ch, cnt in sorted(channel_orders, key=lambda x: x[1], reverse=True)
+        ) or "데이터 없음"
+        print(f"[AI Context] 채널별: {channel_text[:120]}")
     except Exception as e:
         print(f"[AI Context] 채널별 주문 오류: {e}")
         channel_text = "  데이터 없음"
@@ -216,19 +272,27 @@ async def get_context(
         print(f"[AI Context] 냉장보관 오류: {e}")
         cold_text = "  없음"
 
-    # ── 슬로팅 (상품별 창고 위치) ─────────────────────────────────────────────
+    # ── 슬로팅 (SlottingPage와 동일한 알고리즘) ──────────────────────────────
     try:
-        slotting_items = db.query(Product).filter(
-            Product.location_code != None
-        ).all()
+        from backend.routers.slotting import _turnover_data, _abc_classify, _assign_locations
+
+        slotting_products = db.query(Product).filter(Product.is_active == True).all()
+        turnover   = _turnover_data(db)
+        classified = _abc_classify(slotting_products, turnover)
+        recs       = _assign_locations(classified)
+
         slotting_lines = []
-        for p in slotting_items[:15]:
+        for r in recs:
+            move_flag = "⚠️이동필요" if r["needs_move"] else "적정"
             slotting_lines.append(
-                f"  - {p.name}: 현재위치={p.location_code}({p.warehouse_zone}구역)"
+                f"  - {r['product_name']}: 현재={r['current_location']}({r['current_zone']}구역) | "
+                f"권장={r['recommended_location']}({r['recommended_zone']}구역) | "
+                f"ABC={r['abc_class']} | 30일판매={r['total_sold_30d']}개 | {move_flag}"
             )
         slotting_text = "\n".join(slotting_lines) if slotting_lines else "  데이터 없음"
-        print(f"[AI Context] 슬로팅: {len(slotting_items)}건")
+        print(f"[AI Context] 슬로팅: {len(recs)}건")
     except Exception as e:
+        import traceback; traceback.print_exc()
         print(f"[AI Context] 슬로팅 오류: {e}")
         slotting_text = "  데이터 없음"
 
@@ -252,8 +316,8 @@ async def get_context(
         print(f"[AI Context] 창고 오류: {e}")
         warehouse_text = "  데이터 없음"
 
-    # ── 수요예측 + 보충입고 (forecast.py와 동일한 best-MA 계산) ───────────────
-    seller_name_map = {
+    # ── 수요예측 + 보충입고 (reorder.py와 동일한 _analyze 계산) ─────────────
+    _seller_name_map_restock = {
         "CLIO Cosmetics": "클리오", "goodal": "구달",
         "b.plain": "비플레인", "BBIA Cosmetic": "삐아",
         "SKINFOOD": "스킨푸드", "d'Alba": "달바",
@@ -261,40 +325,42 @@ async def get_context(
     forecast_text = ""
     restock_text  = "  데이터 없음"
     try:
-        from backend.routers.forecast import _build_product_forecast
+        from backend.routers.reorder import _analyze
 
-        all_products_inv = db.query(Product, Inventory).join(
-            Inventory, Inventory.product_id == Product.id
-        ).all()
-
+        all_products = db.query(Product).filter(Product.is_active == True).all()
         restock_lines = []
         forecast_lines = []
-        for product, inv in all_products_inv:
-            fc = _build_product_forecast(db, product)
-            daily_demand = fc["avg_daily_sales"]
-            days_left    = fc["days_of_stock"]
-            window       = fc["recommended_window"]
-            reorder_point = int(daily_demand * 3 + daily_demand * 7)
+        _urgency_map = {"CRITICAL": "긴급", "WARNING": "주의"}
+
+        for product in all_products:
+            data = _analyze(db, product)
+            daily_demand    = data["daily_demand"]
+            days_left       = data["days_of_stock"]
+            current_stock   = data["current_stock"]
+            recommended_qty = data["recommended_qty"]
+            reorder_point   = data["reorder_point"]
+            urgency_en      = data["urgency"]
 
             forecast_lines.append(
-                f"{product.name}|일평균:{daily_demand}개(MA{window})|소진:{days_left}일후|재고:{inv.quantity}개"
+                f"{product.name}|일평균:{daily_demand}개|소진:{days_left}일후|재고:{current_stock}개|{urgency_en}"
             )
 
-            urgency = "긴급" if inv.quantity < 20 else ("주의" if days_left < 14 else None)
-            if urgency is None:
+            urgency_kr = _urgency_map.get(urgency_en)
+            if urgency_kr is None:
                 continue
 
             seller = db.query(User).filter(User.id == product.seller_id).first()
-            sname = seller_name_map.get(seller.full_name if seller else "", "")
+            sname = _seller_name_map_restock.get(seller.full_name if seller else "", "")
+            print(f"[AI Context] 보충입고 샘플: stock={current_stock}, daily={daily_demand}, reorder_point={reorder_point}, recommended={recommended_qty}")
 
             restock_lines.append(
-                f"  - [{urgency}] {sname} | {product.name} | "
-                f"현재재고:{inv.quantity}개 | 일평균판매:{daily_demand}개/일(MA{window}) | "
-                f"소진예상:{days_left}일후 | 재주문점:{reorder_point}개"
+                f"  - [{urgency_kr}] {sname} | {product.name} | "
+                f"현재재고:{current_stock}개 | 일평균판매:{daily_demand}개/일 | "
+                f"소진예상:{days_left}일후 | 재주문점:{reorder_point}개 | 권장발주량:{recommended_qty}개"
             )
 
         forecast_text = "\n".join(forecast_lines) if forecast_lines else "  데이터 없음"
-        print(f"[AI Context] 수요예측 샘플: {forecast_text[:200]}")
+        print(f"[AI Context] 수요예측(reorder._analyze): {len(all_products)}건")
 
         urgent_count = sum(1 for l in restock_lines if '[긴급]' in l)
         restock_text = (
@@ -478,7 +544,15 @@ async def get_context(
 배송완료(주문기준): {delivered_orders}건
 취소: {cancelled}건
 
-=== 채널별 주문 ===
+=== 미처리 주문 현황 ===
+미처리주문합계(처리필요): {received + picking + packed}건
+- 주문접수대기(RECEIVED): {received}건
+- 출고준비중(PICKING): {picking}건
+- 패킹완료(PACKED): {packed}건
+
+=== 채널별 주문 현황 ===
+(채널 = 판매 플랫폼: SMARTSTORE/CAFE24/OLIVEYOUNG/ZIGZAG/MANUAL)
+(셀러 = 브랜드: 달바/클리오/구달/비플레인/삐아/스킨푸드)
 {channel_text}
 
 === 브랜드별 주문 ===
@@ -491,10 +565,15 @@ async def get_context(
 배송완료: {delivered_delivery}건
 오늘배송완료: {delivered_today}건
 
+=== 오늘 출고 택배사별 현황 ===
+{courier_today_text}
+
+=== 이동중 택배사별 현황 ===
+{transit_courier_text}
+
 === 반품 현황 ===
 전체반품: {total_returns}건
-접수대기: {return_requested}건
-검수중: {return_in_review}건
+{return_detail_text}
 
 === 재고 알림 ===
 유통기한임박(30일이내): {expiry_soon}건
@@ -519,7 +598,7 @@ async def get_context(
 === 상품별 창고 위치 (슬로팅) ===
 {slotting_text}
 
-=== 수요예측 (일평균판매/소진예상) ===
+=== 수요예측 Prophet (일평균/소진/추세) ===
 {forecast_text}
 
 === 보충 입고 요청 (긴급/권고) ===
@@ -570,7 +649,7 @@ def filter_context_for_question(full_context: str, message: str) -> str:
         sections[current_key] = '\n'.join(current_lines)
 
     # Always include basic order/date info
-    base_keys = ["주문 현황", "오늘"]
+    base_keys = ["주문 현황", "미처리 주문", "오늘"]
     base = '\n'.join(v for k, v in sections.items() if any(b in k for b in base_keys))
 
     # Keyword to section mapping
@@ -578,14 +657,16 @@ def filter_context_for_question(full_context: str, message: str) -> str:
         ("유통기한", "만료", "lot", "로트", "lot번호", "abc", "구역", "보관"): ["재고 상세", "LOT", "유통"],
         ("보충", "긴급", "소진", "재주문"): ["보충 입고", "재고부족"],
         ("일평균", "소진", "예상", "수요", "판매량", "forecast"): ["수요예측", "소진", "보충 입고"],
+        ("채널", "스마트스토어", "올리브영", "지그재그", "카페24"): ["채널별"],
+        ("미처리", "처리필요", "접수대기"): ["미처리 주문"],
         ("셀러", "브랜드", "주문 많"): ["브랜드별"],
         ("채팅", "미읽음", "답장"): ["채팅"],
         ("입고", "스케줄", "오전", "오후", "내일", "도크"): ["입고", "스케줄", "인바운드"],
         ("프로모션", "세일", "행사"): ["프로모션"],
         ("이슈", "문제"): ["이슈"],
         ("정산", "미확정"): ["정산"],
-        ("배송", "택배", "이동중"): ["배송"],
-        ("반품",): ["반품"],
+        ("배송", "택배", "이동중", "택배사", "cj", "한진", "롯데", "로젠"): ["배송", "택배사", "이동중"],
+        ("반품", "반송", "교환", "환불", "restocked", "disposed"): ["반품 현황"],
         ("냉장",): ["냉장"],
         ("슬로팅", "위치", "구역"): ["슬로팅", "창고"],
     }
@@ -627,14 +708,12 @@ async def chat(
 
     system_prompt = f"""당신은 FullFit 화장품 풀필먼트 센터 AI 어시스턴트입니다.
 
-[중요] 셀러(브랜드): 달바, 클리오, 구달, 비플레인, 삐아, 스킨푸드
-[중요] 채널(판매처): 스마트스토어, 카페24, 올리브영, 지그재그 (셀러와 다름!)
-
-[중요 데이터 구분]
-- LOT번호: 대괄호[] 안에 있는 값 (예: [LOT-GOO-003-001]) — 로트/배치 식별자
-- 유통기한만료일: 상품이 실제 만료되는 날짜 (날짜 형식)
-- 재고소진예상: "지금으로부터N일후" 형식 — 현재 재고가 소진될 때까지 남은 일수 (유통기한과 전혀 다름!)
-- 재주문점: 이 수량 이하로 떨어지면 발주해야 하는 기준 수량
+[데이터 구조 - 반드시 숙지]
+채널(판매플랫폼): SMARTSTORE=스마트스토어, CAFE24=카페24, OLIVEYOUNG=올리브영, ZIGZAG=지그재그, MANUAL=수동
+셀러(브랜드): 달바, 클리오, 구달, 비플레인, 삐아, 스킨푸드
+택배사(carrier): CJ, HANJIN, LOTTE, ROSEN, ETC
+미처리주문 = 주문접수대기(RECEIVED)+출고준비중(PICKING)+패킹완료(PACKED) 합산
+LOT번호: 배치 식별자 | 유통기한만료일: 실제 만료 날짜 | 재고소진예상: 현재재고 소진까지 남은 일수(유통기한과 다름!)
 
 [현재 운영 데이터]
 {filtered_context}
@@ -643,11 +722,11 @@ async def chat(
 
 {f"[이전 대화]{chr(10)}{history}" if history else ""}
 
-[규칙]
-- 한국어로만 답변
-- 상품명은 데이터에 있는 그대로 정확하게
-- 2-3문장 간결하게
-- 반복 금지"""
+[답변 규칙]
+- 채널 질문 → 채널별 주문 현황 섹션 참고 (SMARTSTORE/CAFE24/OLIVEYOUNG/ZIGZAG/MANUAL)
+- 미처리주문 질문 → 미처리주문합계 숫자 사용
+- 택배사 질문 → 택배사별 현황 섹션 참고
+- 한국어로만 답변, 2-3문장 간결하게, 반복 금지"""
 
     import re
 

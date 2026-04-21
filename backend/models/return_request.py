@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Enum, ForeignKey, Text, DateTime
+from sqlalchemy import Column, Date, Integer, String, Enum, ForeignKey, Text, DateTime
 from sqlalchemy.orm import relationship
 from backend.models.user import Base
 
@@ -30,6 +30,9 @@ class ReturnRequest(Base):
     status = Column(Enum(ReturnStatus), default=ReturnStatus.REQUESTED, nullable=False)
     note = Column(Text, nullable=True)
     inspection_note = Column(Text, nullable=True)
+    inspection_grade = Column(String(1), nullable=True)
+    inspection_photos = Column(Text, nullable=True)
+    inspected_at = Column(Date, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     resolved_at = Column(DateTime, nullable=True)

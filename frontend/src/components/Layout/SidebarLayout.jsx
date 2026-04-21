@@ -31,6 +31,7 @@ const ADMIN_MENUS = [
       { icon: '📈', label: '수요 예측',    path: '/admin/forecast' },
       { icon: '🛒', label: '보충 입고 요청', path: '/admin/restock' },
       { icon: '📊', label: '슬로팅 최적화', path: '/admin/slotting' },
+      { icon: '🔍', label: '재고 실사',    path: '/admin/inventory-audit' },
     ],
   },
   {
@@ -121,6 +122,7 @@ const PAGE_TITLES = {
   '/admin/sellers':      '셀러 관리',
   '/admin/kpi':          'KPI 리포트',
   '/admin/inventory-adjust': '재고 조정',
+  '/admin/inventory-audit':  '재고 실사',
   '/worker/dashboard':      '대시보드',
   '/worker/picking':        '피킹 목록',
   '/worker/batch-picking':  '배치 피킹',

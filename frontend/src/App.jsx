@@ -39,6 +39,7 @@ import SlottingPage from './pages/admin/SlottingPage'
 import InboundSchedulePage from './pages/admin/InboundSchedulePage'
 import KPIReportPage from './pages/admin/KPIReportPage'
 import InventoryAdjustPage from './pages/admin/InventoryAdjustPage'
+import InventoryAuditPage from './pages/admin/InventoryAuditPage'
 
 export default function App() {
   const loadFromStorage = useAuthStore((s) => s.loadFromStorage)
@@ -78,6 +79,7 @@ export default function App() {
                 <Route path="delivery-map" element={<DeliveryMapPage />} />
                 <Route path="kpi"          element={<KPIReportPage />} />
                 <Route path="inventory-adjust" element={<InventoryAdjustPage />} />
+                <Route path="inventory-audit"  element={<InventoryAuditPage />} />
                 <Route path="*" element={<Navigate to="dashboard" replace />} />
               </Routes>
             </ProtectedRoute>

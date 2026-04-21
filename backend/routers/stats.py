@@ -139,11 +139,11 @@ def admin_stats(
         .filter(func.date(Order.created_at) == today)
         .scalar() or 0
     )
-    pending_orders = (
-        db.query(func.count(Order.id))
-        .filter(Order.status.in_([OrderStatus.RECEIVED, OrderStatus.PICKING]))
-        .scalar() or 0
-    )
+    received = db.query(func.count(Order.id)).filter(Order.status == OrderStatus.RECEIVED).scalar() or 0
+    picking  = db.query(func.count(Order.id)).filter(Order.status == OrderStatus.PICKING).scalar() or 0
+    packed   = db.query(func.count(Order.id)).filter(Order.status == OrderStatus.PACKED).scalar() or 0
+    pending_orders = received + picking + packed
+    print(f"[Stats] 미처리주문: received={received}, picking={picking}, packed={packed}, total={pending_orders}")
     low_stock_count = (
         db.query(func.count(Inventory.id))
         .filter(Inventory.quantity < 50)

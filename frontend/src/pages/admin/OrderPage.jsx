@@ -93,8 +93,9 @@ export default function AdminOrderPage() {
   const [searchParams] = useSearchParams()
   const [orders, setOrders] = useState([])
   const [total, setTotal] = useState(0)
-  const [filterStatus, setFilterStatus] = useState(() => searchParams.get('filter') === 'pending' ? 'RECEIVED' : '')
+  const [filterStatus, setFilterStatus] = useState('')
   const [filterToday, setFilterToday] = useState(() => searchParams.get('filter') === 'today')
+  const [pendingMode, setPendingMode] = useState(() => searchParams.get('filter') === 'pending')
   const [filterChannel, setFilterChannel] = useState('')
   const [filterSeller, setFilterSeller] = useState('')
   const [sellers, setSellers] = useState([])
@@ -121,13 +122,15 @@ export default function AdminOrderPage() {
 
   const showToast = (msg, type = 'success') => addToast(type, msg)
 
+  const PENDING_STATUSES = ['RECEIVED', 'PICKING', 'PACKED']
+
   const fetchOrders = async () => {
     const params = new URLSearchParams()
-    if (filterStatus) params.set('status', filterStatus)
+    if (!pendingMode && filterStatus) params.set('status', filterStatus)
     if (filterChannel) params.set('channel', filterChannel)
     if (filterSeller) params.set('seller_id', filterSeller)
     if (search) params.set('search', search)
-    params.set('limit', '100')
+    params.set('limit', pendingMode ? '500' : '100')
     const res = await api.get(`/orders/?${params}`)
     const items = res.data.items
     // Detect new order IDs for row flash
@@ -169,11 +172,15 @@ export default function AdminOrderPage() {
   }, [])
 
   const todayStr = new Date().toISOString().slice(0, 10)
-  const displayedOrders = filterToday
-    ? orders.filter(o => o.created_at && o.created_at.slice(0, 10) === todayStr)
-    : orders
+  const displayedOrders = (() => {
+    let list = filterToday
+      ? orders.filter(o => o.created_at && o.created_at.slice(0, 10) === todayStr)
+      : orders
+    if (pendingMode) list = list.filter(o => PENDING_STATUSES.includes(o.status))
+    return list
+  })()
 
-  useEffect(() => { fetchOrders() }, [filterStatus, filterChannel, filterSeller, search, tick])
+  useEffect(() => { fetchOrders() }, [filterStatus, filterChannel, filterSeller, search, tick, pendingMode])
 
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 8000)
@@ -276,6 +283,12 @@ export default function AdminOrderPage() {
               {/* Controls */}
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div className="flex flex-wrap items-center gap-2">
+                  {pendingMode && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#FEF9C3] text-[#854D0E] rounded-full text-xs font-medium">
+                      미처리 주문
+                      <button onClick={() => setPendingMode(false)} className="hover:text-[#78350F] font-bold">×</button>
+                    </span>
+                  )}
                   {filterToday && (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#DBEAFE] text-[#1D4ED8] rounded-full text-xs font-medium">
                       오늘 주문

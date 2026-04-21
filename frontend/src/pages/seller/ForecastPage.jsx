@@ -276,7 +276,7 @@ export default function SellerForecastPage() {
               <LiveIndicator />
             </div>
             <div className="flex items-center justify-between mt-1">
-              <p className="text-sm" style={{ color: '#64748B' }}>이동평균 기반 수요 예측 + 재고 소진 분석</p>
+              <p className="text-sm" style={{ color: '#64748B' }}>가중이동평균(WMA) 기반 수요 예측 + 재고 소진 분석</p>
               <LastUpdated time={lastUpdated} />
             </div>
           </div>

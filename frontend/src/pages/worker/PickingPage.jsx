@@ -103,18 +103,18 @@ function ExceptionModal({ order, onClose, onSubmit, isSubmitting }) {
 // ── Route Overlay Modal ────────────────────────────────────────────────────────
 
 function RouteModal({ routeData, orderId, onComplete, onClose }) {
-  const [checked, setChecked] = useState(new Set())
+  const [confirmed, setConfirmed] = useState(new Set())
 
-  const toggle = (seq) => setChecked((prev) => {
+  const confirm = (seq) => setConfirmed((prev) => {
     const next = new Set(prev)
-    next.has(seq) ? next.delete(seq) : next.add(seq)
+    next.add(seq)
     return next
   })
 
   const route   = routeData?.route ?? []
   const total   = route.length
-  const done    = checked.size
-  const allDone = done === total
+  const done    = confirmed.size
+  const allDone = done === total && total > 0
   const pct     = total > 0 ? Math.round((done / total) * 100) : 0
 
   return (
@@ -129,7 +129,7 @@ function RouteModal({ routeData, orderId, onComplete, onClose }) {
         {/* Header */}
         <div className="px-5 py-4 border-b border-[#E2E8F0] shrink-0">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="font-bold text-base" style={{ color: '#0F172A' }}>최적 피킹 경로</h3>
+            <h3 className="font-bold text-base" style={{ color: '#0F172A' }}>집품 목록</h3>
             <button onClick={onClose} className="text-2xl leading-none" style={{ color: '#94A3B8' }}>×</button>
           </div>
           <div className="flex items-center gap-3 text-sm flex-wrap">
@@ -142,14 +142,17 @@ function RouteModal({ routeData, orderId, onComplete, onClose }) {
               구역: {routeData?.zones_visited?.join(' → ')}
             </span>
           </div>
+          {/* Progress */}
           <div className="mt-3">
             <div className="flex items-center justify-between text-xs mb-1" style={{ color: '#64748B' }}>
-              <span>진행률</span>
-              <span>{done}/{total} 완료</span>
+              <span>집품 진행률</span>
+              <span className="font-bold" style={{ color: allDone ? '#16A34A' : '#2563EB' }}>
+                {done}/{total} 완료
+              </span>
             </div>
-            <div className="h-2 rounded-full bg-[#E2E8F0] overflow-hidden">
+            <div className="h-2.5 rounded-full bg-[#E2E8F0] overflow-hidden">
               <div
-                className="h-2 rounded-full transition-all duration-300"
+                className="h-2.5 rounded-full transition-all duration-300"
                 style={{ width: `${pct}%`, background: allDone ? '#16A34A' : '#2563EB' }}
               />
             </div>
@@ -164,45 +167,80 @@ function RouteModal({ routeData, orderId, onComplete, onClose }) {
             </div>
           )}
           {route.map((stop) => {
-            const isChecked = checked.has(stop.sequence)
+            const isDone    = confirmed.has(stop.sequence)
             const zoneColor = ZONE_COLORS[stop.zone] || '#64748B'
             return (
-              <button
+              <div
                 key={stop.sequence}
-                onClick={() => toggle(stop.sequence)}
-                className={`w-full text-left px-5 py-3 border-b border-[#F1F5F9] transition-colors ${
-                  isChecked ? 'bg-[#F0FDF4]' : 'hover:bg-[#F8FAFC]'
+                className={`px-5 py-4 border-b border-[#F1F5F9] transition-colors ${
+                  isDone ? 'bg-[#F0FDF4]' : 'bg-white'
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <div className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-sm font-bold mt-0.5 ${
-                    isChecked ? 'bg-[#16A34A] text-white' : 'text-white'
-                  }`} style={!isChecked ? { background: zoneColor } : {}}>
-                    {isChecked ? '✓' : stop.sequence}
+                  {/* Sequence badge */}
+                  <div
+                    className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-sm font-bold mt-0.5 text-white"
+                    style={{ background: isDone ? '#16A34A' : zoneColor }}
+                  >
+                    {isDone ? '✓' : stop.sequence}
                   </div>
+
+                  {/* Item info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                    {/* Zone + Location */}
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className="text-xs font-bold px-1.5 py-0.5 rounded"
                         style={{ background: zoneColor + '20', color: zoneColor }}>
                         {stop.zone}구역
                       </span>
-                      <span className="font-mono text-xs font-semibold" style={{ color: '#374151' }}>
+                      <span className="font-mono text-sm font-bold" style={{ color: '#1D4ED8' }}>
                         📍 {stop.location}
                       </span>
                     </div>
-                    <p className={`text-sm font-semibold ${isChecked ? 'line-through text-[#94A3B8]' : ''}`}
-                      style={!isChecked ? { color: '#0F172A' } : {}}>
+
+                    {/* Product name */}
+                    <p className={`text-base font-semibold ${isDone ? 'line-through' : ''}`}
+                      style={{ color: isDone ? '#94A3B8' : '#0F172A' }}>
                       {stop.product_name}
-                      <span className="font-bold ml-1.5" style={{ color: zoneColor }}>× {stop.quantity}</span>
                     </p>
+
+                    {/* SKU + Quantity row */}
+                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                      {stop.sku && (
+                        <span className="font-mono text-xs px-2 py-0.5 rounded bg-[#F1F5F9]"
+                          style={{ color: '#475569' }}>
+                          SKU: {stop.sku}
+                        </span>
+                      )}
+                      <span className="text-sm font-bold" style={{ color: zoneColor }}>
+                        수량: {stop.quantity}개
+                      </span>
+                    </div>
+
                     {stop.order_numbers?.length > 0 && (
                       <p className="text-xs mt-0.5" style={{ color: '#94A3B8' }}>
                         주문: {stop.order_numbers.join(', ')}
                       </p>
                     )}
                   </div>
+
+                  {/* Confirm button */}
+                  <div className="shrink-0 mt-0.5">
+                    {isDone ? (
+                      <span className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-bold bg-[#DCFCE7] text-[#166534]">
+                        ✓ 확인
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => confirm(stop.sequence)}
+                        className="px-3 py-2 rounded-lg text-sm font-bold border-2 border-[#2563EB] text-[#2563EB] hover:bg-[#EFF6FF] active:bg-[#DBEAFE] transition-colors"
+                      >
+                        집품 확인
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </button>
+              </div>
             )
           })}
         </div>

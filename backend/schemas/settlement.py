@@ -15,11 +15,15 @@ class SettlementResponse(BaseModel):
     seller_id: int
     seller_name: str
     year_month: str
+    total_sales: Decimal = Decimal(0)
+    channel_fee: Decimal = Decimal(0)
     storage_fee: Decimal
-    inbound_fee: Decimal
     outbound_fee: Decimal
     extra_fee: Decimal
+    inbound_fee: Decimal
     total_fee: Decimal
+    order_count: int = 0
+    return_count: int = 0
     status: SettlementStatus
     confirmed_at: Optional[datetime]
     created_at: datetime

@@ -38,6 +38,7 @@ from backend.routers import return_request, channel_sync, promotion, notificatio
 from backend.routers import forecast, reorder, vrp, batch_picking, picking_route, slotting
 from backend.routers.batch_picking import create_batch_groups as _bp_create_groups, _build_order_data as _bp_build_data
 from backend.routers import inbound_schedule, issue, kpi, inventory_adjust
+from backend.routers import inbound as inbound_router
 from backend.routers.ai_assistant import router as ai_router
 from backend.routers.vrp import address_to_coords as _coord_from_address
 
@@ -70,6 +71,7 @@ app.include_router(batch_picking.router, tags=["BatchPicking"])
 app.include_router(picking_route.router, tags=["PickingRoute"])
 app.include_router(slotting.router,          tags=["Slotting"])
 app.include_router(inbound_schedule.router, tags=["InboundSchedule"])
+app.include_router(inbound_router.router, tags=["Inbound"])
 app.include_router(issue.router, tags=["Issues"])
 app.include_router(kpi.router, tags=["KPI"])
 app.include_router(inventory_adjust.router, tags=["InventoryAdjust"])
@@ -345,38 +347,87 @@ def seed_orders_large(db):
 
 
 def seed_settlements(db):
-    if db.query(Settlement).count() > 0:
-        return
-    # (email, year_month, storage, inbound, outbound, extra, status, confirmed_at)
-    rows = [
-        ("dalba@fullfit.com",    "2026-02",  75000,  9000, 48000, 0, SettlementStatus.CONFIRMED, datetime(2026, 3, 1)),
-        ("clio@fullfit.com",     "2026-02",  62000,  6200, 38400, 0, SettlementStatus.CONFIRMED, datetime(2026, 3, 1)),
-        ("goodal@fullfit.com",   "2026-02",  48000,  4800, 28800, 0, SettlementStatus.CONFIRMED, datetime(2026, 3, 1)),
-        ("bplain@fullfit.com",   "2026-02",  31000,  3100, 19200, 0, SettlementStatus.CONFIRMED, datetime(2026, 3, 1)),
-        ("bbia@fullfit.com",     "2026-02",  54000,  5400, 32400, 0, SettlementStatus.CONFIRMED, datetime(2026, 3, 1)),
-        ("skinfood@fullfit.com", "2026-02",  38000,  3800, 22800, 0, SettlementStatus.CONFIRMED, datetime(2026, 3, 1)),
-        ("dalba@fullfit.com",    "2026-03",  80000,  9600, 52800, 0, SettlementStatus.DRAFT,     None),
-        ("clio@fullfit.com",     "2026-03",  65000,  6500, 40000, 0, SettlementStatus.DRAFT,     None),
-        ("goodal@fullfit.com",   "2026-03",  50000,  5000, 30000, 0, SettlementStatus.DRAFT,     None),
-        ("bplain@fullfit.com",   "2026-03",  33000,  3300, 20000, 0, SettlementStatus.DRAFT,     None),
-        ("bbia@fullfit.com",     "2026-03",  56000,  5600, 33600, 0, SettlementStatus.DRAFT,     None),
-        ("skinfood@fullfit.com", "2026-03",  40000,  4000, 24000, 0, SettlementStatus.DRAFT,     None),
-    ]
-    added = 0
-    for email, ym, storage, inb, out, extra, status, confirmed_at in rows:
-        seller = db.query(User).filter(User.email == email).first()
-        if not seller:
-            continue
-        total = Decimal(str(storage + inb + out + extra))
-        db.add(Settlement(
-            seller_id=seller.id, year_month=ym,
-            storage_fee=Decimal(str(storage)), inbound_fee=Decimal(str(inb)),
-            outbound_fee=Decimal(str(out)), extra_fee=Decimal(str(extra)),
-            total_fee=total, status=status, confirmed_at=confirmed_at,
-        ))
-        added += 1
+    # Always delete and recreate so formula changes take effect on restart
+    db.query(Settlement).delete()
     db.commit()
-    print(f"✅ Seed settlements created ({added} records for all brands).")
+
+    channel_fee_rates = {
+        "SMARTSTORE": 0.033, "CAFE24": 0.020,
+        "OLIVEYOUNG": 0.250, "ZIGZAG": 0.100, "MANUAL": 0.0,
+    }
+    periods = [("2026-02", SettlementStatus.CONFIRMED, datetime(2026, 3, 1)),
+               ("2026-03", SettlementStatus.DRAFT,     None)]
+
+    sellers = db.query(User).filter(User.role == UserRole.SELLER).all()
+    added = 0
+
+    for seller in sellers:
+        for ym, status, confirmed_at in periods:
+            orders = (
+                db.query(Order)
+                .filter(
+                    Order.seller_id == seller.id,
+                    Order.status.in_([OrderStatus.DELIVERED, OrderStatus.SHIPPED]),
+                    Order.created_at.like(f"{ym}%"),
+                )
+                .all()
+            )
+
+            total_sales = sum(float(o.total_amount or 0) for o in orders)
+
+            total_channel_fee = 0.0
+            total_shipping_fee = 0.0
+            for o in orders:
+                channel_key = str(o.channel).split(".")[-1]
+                rate = channel_fee_rates.get(channel_key, 0.033)
+                total_channel_fee += float(o.total_amount or 0) * rate
+                items = db.query(OrderItem).filter(OrderItem.order_id == o.id).all()
+                item_count = sum(it.quantity for it in items)
+                total_shipping_fee += min(800 + max(0, item_count - 1) * 200, 2000)
+
+            inventories = (
+                db.query(Inventory)
+                .join(Product, Product.id == Inventory.product_id)
+                .filter(Product.seller_id == seller.id)
+                .all()
+            )
+            storage_fee = len(inventories) * 5000
+
+            return_count = (
+                db.query(ReturnRequest)
+                .filter(
+                    ReturnRequest.seller_id == seller.id,
+                    ReturnRequest.created_at.like(f"{ym}%"),
+                )
+                .count()
+            )
+            return_fee = return_count * 1500
+
+            if total_sales == 0:
+                total_channel_fee = total_shipping_fee = storage_fee = return_fee = 0.0
+
+            total_deduction = total_channel_fee + total_shipping_fee + storage_fee + return_fee
+            final_amount = max(0.0, total_sales - total_deduction)
+
+            db.add(Settlement(
+                seller_id=seller.id,
+                year_month=ym,
+                total_sales=Decimal(str(round(total_sales))),
+                channel_fee=Decimal(str(round(total_channel_fee))),
+                outbound_fee=Decimal(str(round(total_shipping_fee))),
+                storage_fee=Decimal(str(storage_fee)),
+                extra_fee=Decimal(str(return_fee)),
+                inbound_fee=Decimal("0"),
+                total_fee=Decimal(str(round(final_amount))),
+                order_count=len(orders),
+                return_count=return_count,
+                status=status,
+                confirmed_at=confirmed_at,
+            ))
+            added += 1
+
+    db.commit()
+    print(f"✅ Seed settlements recreated ({added} records, real formula applied).")
 
 
 def seed_returns(db):

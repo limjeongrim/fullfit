@@ -20,6 +20,7 @@ from backend.core.dependencies import require_role
 from backend.core.notify import create_notification
 from backend.models.notification import NotificationType
 from backend.models.user import UserRole as _UserRole
+from backend.models.inventory_adjustment import InventoryAdjustment, AdjustmentType
 
 router = APIRouter()
 
@@ -227,6 +228,38 @@ def register_inbound(
         created_by=inbound.created_by,
         created_at=inbound.created_at,
     )
+
+
+# ── Inventory audit endpoint ──────────────────────────────────────────────────
+
+@router.post("/inventory/audit")
+def submit_inventory_audit(
+    data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role([UserRole.ADMIN])),
+):
+    adjustments = data.get("adjustments", [])
+    applied = 0
+    for adj in adjustments:
+        inv = db.query(Inventory).filter(Inventory.id == adj["inventory_id"]).first()
+        if not inv:
+            continue
+        old_qty = inv.quantity
+        new_qty = max(0, adj["actual_qty"])
+        inv.quantity = new_qty
+        log = InventoryAdjustment(
+            inventory_id=inv.id,
+            adjusted_by=current_user.id,
+            adjustment_type=AdjustmentType.SET,
+            quantity_before=old_qty,
+            quantity_after=new_qty,
+            delta=new_qty - old_qty,
+            reason=f"재고실사 ({adj.get('audit_date', '')})",
+        )
+        db.add(log)
+        applied += 1
+    db.commit()
+    return {"success": True, "adjusted": applied}
 
 
 # ── Product endpoints ──────────────────────────────────────────────────────────

@@ -48,17 +48,20 @@ def _days_of_stock(db: Session, product_id: int) -> float:
 
 
 def _has_upcoming_promotion(db: Session, product_id: int, within_days: int = 7) -> bool:
-    today = date.today()
-    end   = today + timedelta(days=within_days)
-    return (
-        db.query(Promotion)
-        .filter(
-            Promotion.is_active == True,
-            Promotion.start_date <= end,
-            Promotion.end_date   >= today,
-        )
-        .first()
-    ) is not None
+    try:
+        today = date.today()
+        end   = today + timedelta(days=within_days)
+        return (
+            db.query(Promotion)
+            .filter(
+                Promotion.start_date <= end,
+                Promotion.end_date   >= today,
+            )
+            .first()
+        ) is not None
+    except Exception as e:
+        print(f"[Promo check error]: {e}")
+        return False
 
 
 def _past_inbound_count(db: Session, seller_id: int) -> int:

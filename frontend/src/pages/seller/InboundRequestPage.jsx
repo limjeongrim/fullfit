@@ -47,12 +47,13 @@ function ScheduleBadge({ schedule, onConfirm }) {
 export default function SellerInboundRequestPage() {
   const addToast  = useToastStore((s) => s.addToast)
   const user      = useAuthStore((s) => s.user)
-  const [products, setProducts]   = useState([])
-  const [history, setHistory]     = useState([])
-  const [schedules, setSchedules] = useState([])   // seller's upcoming schedules
-  const [submitting, setSubmitting] = useState(false)
-  const [successMsg, setSuccessMsg] = useState('')
-  const [formError, setFormError]   = useState('')
+  const [products, setProducts]       = useState([])
+  const [history, setHistory]         = useState([])
+  const [schedules, setSchedules]     = useState([])
+  const [pendingRequests, setPendingRequests] = useState([])
+  const [submitting, setSubmitting]   = useState(false)
+  const [successMsg, setSuccessMsg]   = useState('')
+  const [formError, setFormError]     = useState('')
   const [form, setForm] = useState({
     product_id: '',
     quantity: '',
@@ -62,9 +63,10 @@ export default function SellerInboundRequestPage() {
     note: '',
   })
 
-  const fetchProducts  = () => api.get('/products/seller').then(r => setProducts(r.data)).catch(() => {})
-  const fetchHistory   = () => api.get('/inventory/inbound/seller').then(r => setHistory(r.data)).catch(() => {})
-  const fetchSchedules = () => {
+  const fetchProducts       = () => api.get('/products/seller').then(r => setProducts(r.data)).catch(() => {})
+  const fetchHistory        = () => api.get('/inventory/inbound/seller').then(r => setHistory(r.data)).catch(() => {})
+  const fetchPendingRequests = () => api.get('/inbound/pending-approval').then(r => setPendingRequests(r.data)).catch(() => {})
+  const fetchSchedules      = () => {
     if (!user?.id) return
     api.get(`/inbound-schedule/seller/${user.id}`).then(r => setSchedules(r.data)).catch(() => {})
   }
@@ -72,11 +74,34 @@ export default function SellerInboundRequestPage() {
   useEffect(() => {
     fetchProducts()
     fetchHistory()
+    fetchPendingRequests()
   }, [])
 
   useEffect(() => {
     if (user?.id) fetchSchedules()
   }, [user?.id])
+
+  const handleApprove = async (id) => {
+    try {
+      await api.post(`/inbound/${id}/approve`)
+      addToast('success', '✅ 입고 요청을 승인했습니다. 관리자가 스케줄을 배정합니다.')
+      fetchPendingRequests()
+    } catch {
+      addToast('error', '승인 처리에 실패했습니다.')
+    }
+  }
+
+  const handleReject = async (id) => {
+    const reason = prompt('거절 사유를 입력하세요:')
+    if (!reason) return
+    try {
+      await api.post(`/inbound/${id}/reject`, { reason })
+      addToast('success', '입고 요청을 거절했습니다.')
+      fetchPendingRequests()
+    } catch {
+      addToast('error', '거절 처리에 실패했습니다.')
+    }
+  }
 
   // Build map: inbound_id → schedule
   const scheduleByInbound = {}
@@ -135,6 +160,46 @@ export default function SellerInboundRequestPage() {
             <h2 className="text-2xl font-bold" style={{ color: '#0F172A' }}>입고 요청</h2>
             <p className="mt-1 text-sm" style={{ color: '#64748B' }}>풀핏 창고로 상품을 보내기 전에 입고 요청을 등록하세요.</p>
           </div>
+
+          {/* Pending approval requests from admin */}
+          {pendingRequests.length > 0 && (
+            <div className="mb-6">
+              <h3 className="font-semibold text-sm mb-3 flex items-center gap-2" style={{ color: '#B45309' }}>
+                <span>📋</span> 관리자 입고 요청 — 승인이 필요합니다 ({pendingRequests.length}건)
+              </h3>
+              <div className="space-y-3">
+                {pendingRequests.map(req => (
+                  <div key={req.id} className="border border-[#FCD34D] rounded-xl p-4 bg-[#FFFBEB]">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="font-bold text-[#0F172A]">{req.product_name}</p>
+                      <span className="text-xs font-mono text-[#64748B]">{req.sku}</span>
+                    </div>
+                    <div className="text-sm text-[#374151] space-y-0.5">
+                      <p>요청 수량: <span className="font-semibold">{req.quantity}개</span></p>
+                      <p>LOT: <span className="font-mono">{req.lot_number}</span></p>
+                      {req.expiry_date && <p>유통기한: {req.expiry_date}</p>}
+                      <p className="text-xs text-[#94A3B8]">요청일: {req.requested_date}</p>
+                      {req.note && <p className="text-xs text-[#64748B] italic">{req.note}</p>}
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => handleApprove(req.id)}
+                        className="flex-1 bg-[#16A34A] hover:bg-[#15803D] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+                      >
+                        ✅ 승인
+                      </button>
+                      <button
+                        onClick={() => handleReject(req.id)}
+                        className="flex-1 bg-[#DC2626] hover:bg-[#B91C1C] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+                      >
+                        ❌ 거절
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Upcoming schedule banner */}
           {schedules.length > 0 && (

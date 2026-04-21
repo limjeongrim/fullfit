@@ -73,10 +73,46 @@ function EmptySlot() {
 export default function InboundSchedulePage() {
   const addToast = useToastStore((s) => s.addToast)
   const [selectedDate, setSelectedDate] = useState(tomorrow())
-  const [schedule, setSchedule] = useState(null)   // { date, slots_used, slots_available, schedule, overflow }
+  const [schedule, setSchedule] = useState(null)
   const [loading, setLoading]   = useState(false)
   const [generating, setGenerating] = useState(false)
   const [pendingCount, setPendingCount] = useState(null)
+  const [approvedInbounds, setApprovedInbounds] = useState([])
+  const [scheduleModal, setScheduleModal] = useState(null)
+
+  const fetchApprovedInbounds = async () => {
+    try {
+      const res = await api.get('/inbound/approved')
+      setApprovedInbounds(res.data)
+    } catch { /* silent */ }
+  }
+
+  const handleScheduleAssign = (inbound) => {
+    setScheduleModal({
+      inbound_id: inbound.id,
+      product_name: inbound.product_name,
+      quantity: inbound.quantity,
+      scheduled_date: tomorrow(),
+      time_slot: '09:00-10:00',
+      dock_number: 1,
+    })
+  }
+
+  const handleScheduleSubmit = async () => {
+    try {
+      await api.post(`/inbound/${scheduleModal.inbound_id}/schedule`, {
+        scheduled_date: scheduleModal.scheduled_date,
+        time_slot: scheduleModal.time_slot,
+        dock_number: scheduleModal.dock_number,
+      })
+      addToast('success', '✅ 스케줄이 배정되었습니다. 워커에게 알림을 보냈습니다.')
+      setScheduleModal(null)
+      fetchApprovedInbounds()
+      fetchSchedule(selectedDate)
+    } catch {
+      addToast('error', '스케줄 배정에 실패했습니다.')
+    }
+  }
 
   const fetchSchedule = async (d) => {
     setLoading(true)
@@ -98,6 +134,7 @@ export default function InboundSchedulePage() {
   }
 
   useEffect(() => { fetchSchedule(selectedDate) }, [selectedDate])
+  useEffect(() => { fetchApprovedInbounds() }, [])
 
   const handleGenerate = async () => {
     setGenerating(true)
@@ -175,6 +212,32 @@ export default function InboundSchedulePage() {
               {generating ? '생성 중...' : '🗓 스케줄 생성'}
             </button>
           </div>
+
+          {/* Approved inbounds awaiting schedule */}
+          {approvedInbounds.length > 0 && (
+            <div className="mb-6 bg-white rounded-xl border border-[#BBF7D0] shadow-[0_1px_3px_rgba(0,0,0,0.06)] p-5">
+              <h3 className="font-semibold text-sm text-[#166534] mb-3 flex items-center gap-2">
+                <span>✅</span> 셀러 승인 완료 — 스케줄 배정 대기 ({approvedInbounds.length}건)
+              </h3>
+              <div className="space-y-2">
+                {approvedInbounds.map(inbound => (
+                  <div key={inbound.id}
+                    className="flex items-center justify-between border-l-4 border-[#16A34A] pl-3 pr-4 py-2.5 bg-[#F0FDF4] rounded-r-lg">
+                    <div>
+                      <p className="font-medium text-sm text-[#0F172A]">{inbound.product_name}</p>
+                      <p className="text-xs text-[#64748B]">{inbound.quantity}개 · {inbound.seller_name} · LOT: {inbound.lot_number}</p>
+                    </div>
+                    <button
+                      onClick={() => handleScheduleAssign(inbound)}
+                      className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap"
+                    >
+                      스케줄 배정
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Stats bar */}
           {schedule && (
@@ -283,6 +346,53 @@ export default function InboundSchedulePage() {
 
         </div>
       </div>
+
+      {/* Schedule assignment modal */}
+      {scheduleModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-sm mx-4 shadow-2xl">
+            <h3 className="text-lg font-bold mb-1">스케줄 배정</h3>
+            <p className="text-sm text-[#64748B] mb-4">{scheduleModal.product_name} · {scheduleModal.quantity}개</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-[#374151] mb-1">입고 날짜</label>
+                <input type="date" value={scheduleModal.scheduled_date}
+                  onChange={e => setScheduleModal({ ...scheduleModal, scheduled_date: e.target.value })}
+                  className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#374151] mb-1">시간대</label>
+                <select value={scheduleModal.time_slot}
+                  onChange={e => setScheduleModal({ ...scheduleModal, time_slot: e.target.value })}
+                  className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30">
+                  {TIME_SLOTS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-[#374151] mb-1">도크</label>
+                <select value={scheduleModal.dock_number}
+                  onChange={e => setScheduleModal({ ...scheduleModal, dock_number: parseInt(e.target.value) })}
+                  className="w-full border border-[#E2E8F0] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30">
+                  <option value={1}>도크 1 (소량)</option>
+                  <option value={2}>도크 2 (대량)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setScheduleModal(null)}
+                className="flex-1 px-4 py-2 border border-[#E2E8F0] rounded-lg text-sm text-[#374151] hover:bg-[#F8FAFC]">
+                취소
+              </button>
+              <button onClick={handleScheduleSubmit}
+                className="flex-1 px-4 py-2 bg-[#2563EB] hover:bg-[#1D4ED8] text-white rounded-lg text-sm font-semibold">
+                배정 완료
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </SidebarLayout>
   )
 }

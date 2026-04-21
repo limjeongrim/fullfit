@@ -31,7 +31,7 @@ class ProductResponse(BaseModel):
 class InboundCreate(BaseModel):
     product_id: int
     lot_number: str
-    expiry_date: date
+    expiry_date: Optional[date] = None
     quantity: int
     note: Optional[str] = None
 
@@ -41,7 +41,7 @@ class InboundResponse(BaseModel):
     product_id: int
     product_name: str
     lot_number: str
-    expiry_date: date
+    expiry_date: Optional[date] = None
     quantity: int
     inbound_date: date
     note: Optional[str]

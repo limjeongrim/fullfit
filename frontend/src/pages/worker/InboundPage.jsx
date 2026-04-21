@@ -8,11 +8,21 @@ const EMPTY_FORM = { product_id: '', lot_number: '', expiry_date: '', quantity: 
 export default function InboundPage() {
   const addToast = useToastStore((s) => s.addToast)
 
-  const [products, setProducts] = useState([])
-  const [inventory, setInventory] = useState([])
-  const [form, setForm] = useState(EMPTY_FORM)
-  const [formError, setFormError] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const [products, setProducts]               = useState([])
+  const [inventory, setInventory]             = useState([])
+  const [scheduledInbounds, setScheduledInbounds] = useState([])
+  const [form, setForm]                       = useState(EMPTY_FORM)
+  const [formError, setFormError]             = useState('')
+  const [submitting, setSubmitting]           = useState(false)
+
+  const fetchScheduledInbounds = async () => {
+    try {
+      const res = await api.get('/inbound/scheduled-upcoming')
+      setScheduledInbounds(res.data)
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   const fetchData = async () => {
     const [pRes, iRes] = await Promise.all([
@@ -20,15 +30,28 @@ export default function InboundPage() {
       api.get('/inventory/'),
     ])
     setProducts(pRes.data)
-    const sorted = [...iRes.data].sort((a, b) => {
-      const da = a.inbound_date || ''
-      const db_ = b.inbound_date || ''
-      return db_.localeCompare(da)
-    })
+    const sorted = [...iRes.data].sort((a, b) =>
+      (b.inbound_date || '').localeCompare(a.inbound_date || '')
+    )
     setInventory(sorted.slice(0, 10))
   }
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    fetchData()
+    fetchScheduledInbounds()
+  }, [])
+
+  const handleConfirmArrival = async (inboundId, productName, quantity) => {
+    if (!window.confirm(`${productName} ${quantity}개 입고를 확인하시겠습니까?\n확인 시 재고에 즉시 반영됩니다.`)) return
+    try {
+      await api.post(`/inbound/${inboundId}/confirm`, { actual_quantity: quantity })
+      alert('✅ 입고 확인 완료! 재고에 반영되었습니다.')
+      fetchScheduledInbounds()
+      fetchData()
+    } catch (e) {
+      alert('오류: ' + (e.response?.data?.detail || e.message))
+    }
+  }
 
   const handleChange = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
 
@@ -67,7 +90,54 @@ export default function InboundPage() {
     <SidebarLayout>
       <div className="min-h-screen bg-[#F8FAFC]">
         <div className="max-w-2xl mx-auto px-4 py-6">
-          {/* Form card */}
+
+          {/* 입고 스케줄 섹션 */}
+          <div className="mb-6">
+            <h2 className="text-lg font-bold mb-3">📦 입고 예정 스케줄</h2>
+            {scheduledInbounds.length === 0 ? (
+              <div className="text-gray-400 text-sm p-4 border rounded bg-gray-50">
+                예정된 입고가 없습니다.
+              </div>
+            ) : (
+              scheduledInbounds.map(item => (
+                <div key={item.id}
+                  className={`border rounded p-4 mb-3 ${item.is_today ? 'border-blue-400 bg-blue-50' : 'bg-white'}`}>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <div className="font-bold">{item.product_name}</div>
+                      <div className="text-sm text-gray-600">{item.seller_name} | {item.quantity}개</div>
+                      <div className="text-sm text-blue-600 font-medium">
+                        {item.scheduled_date} {item.time_slot} | 도크{item.dock_number}
+                      </div>
+                      {item.lot_number && (
+                        <div className="text-xs text-gray-400">LOT: {item.lot_number}</div>
+                      )}
+                      {item.is_today && (
+                        <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded">오늘</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2 items-end">
+                      <span className={`px-2 py-1 rounded text-xs text-white ${
+                        item.status === 'COMPLETED' ? 'bg-green-500' : 'bg-blue-500'
+                      }`}>
+                        {item.status === 'COMPLETED' ? '✅ 입고완료' : '📋 예정'}
+                      </span>
+                      {item.status !== 'COMPLETED' && (
+                        <button
+                          onClick={() => handleConfirmArrival(item.inbound_id, item.product_name, item.quantity)}
+                          className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
+                        >
+                          입고 확인
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Manual 입고 등록 form */}
           <div className="bg-white rounded-xl shadow-[0_1px_3px_rgba(0,0,0,0.06)] border border-[#E2E8F0] p-6 mb-6">
             <h3 className="text-xl font-bold mb-5" style={{ color: '#0F172A' }}>입고 정보 입력</h3>
 
@@ -92,8 +162,7 @@ export default function InboundPage() {
               <div>
                 <label className={LABEL_CLS} style={{ color: '#374151' }}>LOT번호 *</label>
                 <input type="text" name="lot_number" value={form.lot_number} onChange={handleChange}
-                  placeholder="예: LOT-2026-001"
-                  inputMode="text"
+                  placeholder="예: LOT-2026-001" inputMode="text"
                   className={INPUT_CLS} style={{ fontSize: '16px' }} />
               </div>
 
@@ -106,13 +175,14 @@ export default function InboundPage() {
               <div>
                 <label className={LABEL_CLS} style={{ color: '#374151' }}>수량 *</label>
                 <input type="number" name="quantity" value={form.quantity} onChange={handleChange}
-                  min={1} placeholder="0"
-                  inputMode="numeric"
+                  min={1} placeholder="0" inputMode="numeric"
                   className={INPUT_CLS} style={{ fontSize: '16px' }} />
               </div>
 
               <div>
-                <label className={LABEL_CLS} style={{ color: '#374151' }}>메모 <span className="font-normal text-sm" style={{ color: '#94A3B8' }}>(선택)</span></label>
+                <label className={LABEL_CLS} style={{ color: '#374151' }}>
+                  메모 <span className="font-normal text-sm" style={{ color: '#94A3B8' }}>(선택)</span>
+                </label>
                 <textarea name="note" value={form.note} onChange={handleChange} rows={3}
                   placeholder="입고 메모를 입력하세요"
                   className={`${INPUT_CLS} resize-none`} style={{ fontSize: '16px' }} />
@@ -133,8 +203,7 @@ export default function InboundPage() {
             ) : (
               <div className="flex flex-col gap-3">
                 {inventory.map((inv) => (
-                  <div key={inv.id}
-                    className="bg-[#F8FAFC] rounded-lg p-4 border border-[#E2E8F0]">
+                  <div key={inv.id} className="bg-[#F8FAFC] rounded-lg p-4 border border-[#E2E8F0]">
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="font-bold text-base" style={{ color: '#0F172A' }}>{inv.product_name}</p>
@@ -152,6 +221,7 @@ export default function InboundPage() {
               </div>
             )}
           </div>
+
         </div>
       </div>
     </SidebarLayout>

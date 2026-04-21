@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell,
   LineChart, Line, Legend, ReferenceArea,
@@ -188,18 +187,54 @@ function ChartModal({ item, onClose, onInbound }) {
 }
 
 export default function AdminForecastPage() {
-  const navigate = useNavigate()
   const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [riskFilter, setRiskFilter] = useState('ALL')
   const [selectedItem, setSelectedItem] = useState(null)
+  const [inboundModal, setInboundModal] = useState(null)
 
-  useEffect(() => {
+  const fetchForecastData = () => {
+    setLoading(true)
     api.get('/forecast/summary')
       .then(r => setData(r.data))
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { fetchForecastData() }, [])
+
+  const handleInboundClick = (product) => {
+    const today = new Date()
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '')
+    const autoLot = `LOT-${product.sku}-${dateStr}`
+    const recommendedQty = product.recommended_qty || product.reorder_qty || Math.round((product.avg_daily_sales || 5) * 30)
+    setSelectedItem(null)
+    setInboundModal({
+      product_id: product.product_id,
+      product_name: product.product_name,
+      sku: product.sku,
+      recommended_qty: recommendedQty,
+      lot_number: autoLot,
+      expiry_date: '',
+      quantity: recommendedQty,
+    })
+  }
+
+  const handleInboundSubmit = async () => {
+    try {
+      await api.post('/inbound/request', {
+        product_id: inboundModal.product_id,
+        lot_number: inboundModal.lot_number,
+        quantity: inboundModal.quantity,
+        expiry_date: inboundModal.expiry_date || null,
+      })
+      alert(`✅ ${inboundModal.product_name} ${inboundModal.quantity}개 입고 요청이 셀러에게 전달되었습니다!`)
+      setInboundModal(null)
+      fetchForecastData()
+    } catch (error) {
+      alert('입고 등록 실패: ' + (error.response?.data?.detail || error.message))
+    }
+  }
 
   const reorderCount  = data.filter(d => d.reorder_recommended).length
   const safeCount     = data.filter(d => !d.reorder_recommended).length
@@ -238,7 +273,7 @@ export default function AdminForecastPage() {
         <div className="px-6 py-6">
           <div className="mb-5">
             <h2 className="text-2xl font-bold" style={{ color: '#0F172A' }}>수요 예측 분석</h2>
-            <p className="mt-1 text-sm" style={{ color: '#64748B' }}>이동평균(MA) 기반 수요 예측 + 프로모션 리스크 분석</p>
+            <p className="mt-1 text-sm" style={{ color: '#64748B' }}>가중이동평균(WMA) 기반 수요 예측 + 프로모션 리스크 분석</p>
           </div>
 
           {/* Stats bar */}
@@ -404,8 +439,71 @@ export default function AdminForecastPage() {
           <ChartModal
             item={selectedItem}
             onClose={() => setSelectedItem(null)}
-            onInbound={() => { setSelectedItem(null); navigate('/admin/inventory') }}
+            onInbound={() => handleInboundClick(selectedItem)}
           />
+        )}
+
+        {inboundModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <h3 className="text-lg font-bold mb-4">입고 요청 (셀러 승인 필요)</h3>
+
+              <div className="bg-gray-50 p-3 rounded mb-4">
+                <div className="text-sm text-gray-500">상품명</div>
+                <div className="font-medium">{inboundModal.product_name}</div>
+                <div className="text-sm text-gray-500 mt-1">SKU: {inboundModal.sku}</div>
+              </div>
+
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  LOT번호 <span className="text-xs text-blue-500">(자동생성)</span>
+                </label>
+                <input
+                  type="text"
+                  value={inboundModal.lot_number}
+                  onChange={(e) => setInboundModal({ ...inboundModal, lot_number: e.target.value })}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  입고 수량 <span className="text-xs text-gray-400">(권장: {inboundModal.recommended_qty}개)</span>
+                </label>
+                <input
+                  type="number"
+                  value={inboundModal.quantity}
+                  onChange={(e) => setInboundModal({ ...inboundModal, quantity: parseInt(e.target.value) || 0 })}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">유통기한</label>
+                <input
+                  type="date"
+                  value={inboundModal.expiry_date}
+                  onChange={(e) => setInboundModal({ ...inboundModal, expiry_date: e.target.value })}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setInboundModal(null)}
+                  className="flex-1 px-4 py-2 border rounded text-gray-600 hover:bg-gray-50"
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleInboundSubmit}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  입고 등록
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </SidebarLayout>
